@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "praxis-backend"
+version = "0.1.0"
+description = "PRAXIS FastAPI Backend"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "arq",
+    "pydantic",
+    "pydantic-settings",
+    "psycopg2-binary",
+    "asyncpg",
+    "redis",
+    "PyJWT",
+    "cryptography",
+    "httpx",
+    "python-multipart",
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-instrumentation-fastapi",
+    "numpy",
+    "praxis-config",
+    "praxis-ai-gateway"
+]
+
+[tool.setuptools]
+packages = ["app", "core", "api", "models", "services", "storage"]

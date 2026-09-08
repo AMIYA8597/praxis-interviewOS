@@ -1,0 +1,25 @@
+appId: com.interviewos.praxis
+productName: PRAXIS
+directories:
+  output: dist
+  buildResources: build
+files:
+  - "dist/main/**/*"
+  - "dist/preload/**/*"
+  - "dist/renderer/**/*"
+  - "package.json"
+win:
+  target: nsis
+  icon: build/icon.ico
+  # Explicitly documenting that this is an unsigned build for the hackathon.
+  # Will trigger Windows SmartScreen. 
+  # To bypass, an EV Code Signing Certificate ($300+/yr) + Hardware Token is required.
+  verifyUpdateCodeSignature: false
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: "PRAXIS Interview Coach"

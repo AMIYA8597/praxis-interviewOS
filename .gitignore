@@ -1,0 +1,40 @@
+# Environments
+.env
+!.env.example
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Storage / Files
+storage/
+*.pem
+*.key
+*.cert
+*.sqlite3
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+build/
+.pnpm-store/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

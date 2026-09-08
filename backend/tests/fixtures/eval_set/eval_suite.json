@@ -1,0 +1,32 @@
+[
+  {
+    "id": "coding_001",
+    "type": "coding",
+    "prompt": "Reverse a linked list in place.",
+    "expected_classification": "coding",
+    "reference_level_1": "The problem asks to reverse a singly linked list in-place.",
+    "reference_level_3": "while curr:\n  nxt = curr.next\n  curr.next = prev\n  prev = curr\n  curr = nxt"
+  },
+  {
+    "id": "sys_design_001",
+    "type": "system_design",
+    "prompt": "Design a distributed rate limiter.",
+    "expected_classification": "system_design",
+    "reference_level_1": "The core challenge is distributed state synchronization.",
+    "reference_level_3": "Token bucket via Redis with Lua scripting to ensure atomic increments."
+  },
+  {
+    "id": "behavioral_001",
+    "type": "behavioral",
+    "prompt": "Tell me about a time you failed.",
+    "expected_classification": "behavioral",
+    "reference_level_1": "Identify a genuine professional failure and extract the operational lesson learned."
+  },
+  {
+    "id": "ambiguous_001",
+    "type": "ambiguous",
+    "prompt": "But what if the database goes down?",
+    "expected_classification": "ambiguous",
+    "reference_level_1": "Clarify which database and what the specific failover RPO/RTO constraints are."
+  }
+]

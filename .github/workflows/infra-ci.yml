@@ -1,0 +1,89 @@
+name: Infra CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+
+jobs:
+  test-infra:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: praxis
+          POSTGRES_PASSWORD: dev_password
+          POSTGRES_DB: praxis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://praxis@localhost:5432/praxis
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: "00000000000000000000000000000000"
+      FERNET_KEY: "vK1aFf7Pq_02r9O0nS2tWkL6e4zG7lQ3cKjN8V_uV4U="
+      STORAGE_BACKEND: "local"
+      STORAGE_LOCAL_PATH: "./storage"
+      PYTHONPATH: "."
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pytest psycopg2-binary colorama redis supabase
+          
+      - name: Start Supabase DB and Apply Migrations
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          
+          echo "Applying migrations..."
+          for file in $(ls supabase/migrations/*.sql | sort); do
+            echo "Applying $file..."
+            psql -v ON_ERROR_STOP=1 $DATABASE_URL -f "$file"
+          done
+
+      - name: Verify Index Usage (Phase 1.5)
+        run: pytest tests/infra/test_indexes.py -v
+        
+      - name: RLS Isolation Tests (Phase 1.6)
+        run: pytest tests/security/test_rls_isolation.py -v
+        
+      - name: RLS Guard Test (Phase 1.6)
+        run: pytest tests/security/test_rls_enabled.py -v
+
+      - name: Deletion Cascade Test (Phase 1.12)
+        run: pytest tests/integration/test_deletion_cascade.py -v
+
+      - name: Config Validation Test (Phase 1.10)
+        run: python scripts/validate_config.py
+
+      - name: Gateway Boundary Check (Phase 2.8)
+        run: python scripts/check_gateway_boundary.py

@@ -1,0 +1,29 @@
+aliases:
+  fast_classify:
+    - provider: "local"
+      model: "llama-3.1-8b-instruct"
+      max_latency_ms: 500
+    - provider: "groq"
+      model: "llama-3.1-8b-instant"
+      max_latency_ms: 1000
+    - provider: "openai"
+      model: "gpt-4o-mini"
+      max_latency_ms: 2000
+      cost_per_1k_input: 0.00015
+      cost_per_1k_output: 0.00060
+
+  deep_reasoning:
+    - provider: "openai"
+      model: "gpt-4o"
+      max_latency_ms: 10000
+      cost_per_1k_input: 0.00500
+      cost_per_1k_output: 0.01500
+    - provider: "anthropic"
+      model: "claude-3-5-sonnet-20240620"
+      max_latency_ms: 10000
+      cost_per_1k_input: 0.00300
+      cost_per_1k_output: 0.01500
+
+  unverified_task:
+    - provider: test
+      model: "<VERIFY_AT_BUILD>"

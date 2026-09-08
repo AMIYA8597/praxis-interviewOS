@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "praxis-ai-gateway"
+version = "0.1.0"
+description = "PRAXIS AI Gateway"
+dependencies = [
+    "praxis-config",
+    "pydantic",
+    "PyYAML",
+    "httpx",
+    "respx",
+    "redis",
+    "SQLAlchemy"
+]
+
+[tool.setuptools]
+py-modules = ["base", "budget", "resilience", "router"]
+
+[tool.setuptools.packages.find]
+include = ["providers*"]
