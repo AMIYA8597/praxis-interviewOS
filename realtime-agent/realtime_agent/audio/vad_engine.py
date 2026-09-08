@@ -3,7 +3,7 @@ import numpy as np
 from collections import deque
 from silero_vad import load_silero_vad
 import sounddevice as sd
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import asyncio
 import itertools
@@ -52,7 +52,7 @@ class SileroVADEngine:
         self.is_speech = False
         self.speech_frame_count = 0
         self.silence_frame_count = 0
-        self.last_state_change = datetime.now(datetime.UTC)
+        self.last_state_change = datetime.now(timezone.utc)
         
         logger.info(f"Silero VAD initialized (sample_rate={sample_rate}, chunk_size={chunk_size})")
     
@@ -76,7 +76,7 @@ class SileroVADEngine:
             
             if not self.is_speech and self.speech_frame_count >= self.min_speech_frames:
                 self.is_speech = True
-                self.last_state_change = datetime.now(datetime.UTC)
+                self.last_state_change = datetime.now(timezone.utc)
                 state_changed = True
             else:
                 state_changed = False
@@ -87,7 +87,7 @@ class SileroVADEngine:
             
             if self.is_speech and self.silence_frame_count >= self.min_silence_frames:
                 self.is_speech = False
-                self.last_state_change = datetime.now(datetime.UTC)
+                self.last_state_change = datetime.now(timezone.utc)
                 state_changed = True
             else:
                 state_changed = False
@@ -96,7 +96,7 @@ class SileroVADEngine:
             state_changed = False
         
         # Calculate durations
-        elapsed = (datetime.now(datetime.UTC) - self.last_state_change).total_seconds() * 1000
+        elapsed = (datetime.now(timezone.utc) - self.last_state_change).total_seconds() * 1000
         if self.is_speech:
             speech_duration_ms = elapsed
             silence_duration_ms = 0.0
@@ -107,7 +107,7 @@ class SileroVADEngine:
         return {
             "is_speech": self.is_speech,
             "confidence": float(confidence),
-            "timestamp": datetime.now(datetime.UTC).timestamp(),
+            "timestamp": datetime.now(timezone.utc).timestamp(),
             "state_changed": state_changed,
             "speech_duration_ms": speech_duration_ms,
             "silence_duration_ms": silence_duration_ms,
@@ -118,7 +118,7 @@ class SileroVADEngine:
         self.is_speech = False
         self.speech_frame_count = 0
         self.silence_frame_count = 0
-        self.last_state_change = datetime.now(datetime.UTC)
+        self.last_state_change = datetime.now(timezone.utc)
         logger.info("VAD state reset")
 
 class VADBuffer:
