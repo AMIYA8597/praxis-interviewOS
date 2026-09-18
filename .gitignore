@@ -38,3 +38,22 @@ build/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Environment files - NEVER COMMIT
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Local environment files
+.env.local
+apps/web/.env.local
+apps/desktop/.env.local
+
+# Local model/audio artifacts
+*.wav
+*.bin
+
+# Temporary scratch files
+scratch_*.py
+scratch_*.md
