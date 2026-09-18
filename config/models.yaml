@@ -27,3 +27,6 @@ aliases:
   unverified_task:
     - provider: test
       model: "<VERIFY_AT_BUILD>"
+
+  stt_stream:
+    - provider: " local\n

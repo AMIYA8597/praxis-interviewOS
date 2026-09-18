@@ -7,13 +7,19 @@
     "dev": "electron .",
     "build": "tsc",
     "lint": "eslint src --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
   },
   "dependencies": {
+    "@praxis/types": "workspace:*",
+    "@praxis/ui": "workspace:*",
+    "electron-is-dev": "^3.0.1"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "electron": "^33.0.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.0.0"
   }
 }

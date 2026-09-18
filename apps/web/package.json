@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@praxis/ui": "workspace:*",
+    "@praxis/types": "workspace:*",
     "@supabase/supabase-js": "^2.115.0",
     "lucide-react": "^1.42.0",
     "next": "15.0.0",

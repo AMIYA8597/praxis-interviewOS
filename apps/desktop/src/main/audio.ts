@@ -1,17 +1,19 @@
 import { desktopCapturer, ipcMain } from 'electron';
 
+export async function getAudioSources() {
+  try {
+    const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] });
+    const hasLoopback = sources.some(s => s.id.startsWith('loopback'));
+    return { hasLoopback, sources: sources.map(s => ({ id: s.id, name: s.name })) };
+  } catch (e) {
+    console.error("Failed to enumerate desktop audio:", e);
+    return { hasLoopback: false, sources: [] };
+  }
+}
+
 export function setupAudioCapture() {
   ipcMain.handle('enumerate-devices', async () => {
-    // Note: To get raw hardware, we usually rely on the renderer's navigator.mediaDevices.
-    // However, on Windows, system loopback requires desktopCapturer.
-    try {
-      const sources = await desktopCapturer.getSources({ types: ['audio'] });
-      const hasLoopback = sources.some(s => s.id.startsWith('loopback'));
-      return { hasLoopback, sources: sources.map(s => ({ id: s.id, name: s.name })) };
-    } catch (e) {
-      console.error("Failed to enumerate desktop audio:", e);
-      return { hasLoopback: false, sources: [] };
-    }
+    return await getAudioSources();
   });
 
   ipcMain.on('audio-frame', (event, pcmData: Uint8Array, sequence: number, captureTimestamp: number) => {

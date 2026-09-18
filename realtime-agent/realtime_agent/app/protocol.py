@@ -12,7 +12,12 @@ class Envelope(BaseModel):
         "provider.changed",
         "session.degraded",
         "session.stopped",
-        "audio.stop_playback"
+        "audio.stop_playback",
+        "coaching.metrics",
+        "transcript.partial",
+        "transcript.final",
+        "speech_start",
+        "speech_end"
     ]
     session_id: str
     sequence: int

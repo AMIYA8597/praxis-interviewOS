@@ -120,12 +120,5 @@ class OllamaProvider(LLMProvider):
     async def _embed(self, texts: list[str], cancellation_token: Any = None, **kw) -> list[list[float]]:
         # This is technically not calling Ollama.
         # It's grouped under is_local=True because it runs on this machine with zero network cost.
-        try:
-            from sentence_transformers import SentenceTransformer
-            model_id = kw.get("model", "BAAI/bge-small-en-v1.5")
-            model = SentenceTransformer(model_id)
-            embeddings = model.encode(texts)
-            return embeddings.tolist()
-        except ImportError:
-            # Fallback if sentence-transformers isn't installed in the env
-            raise RuntimeError("sentence-transformers not installed. Cannot compute local embeddings.")
+        from praxis_ai_gateway.embeddings import embed_texts
+        return await embed_texts(texts, normalize=kw.get("normalize", True), batch_size=kw.get("batch_size", 32))

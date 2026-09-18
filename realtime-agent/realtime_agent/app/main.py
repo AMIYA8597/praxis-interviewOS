@@ -109,6 +109,15 @@ def create_app() -> FastAPI:
         
         await websocket.accept()
         
+        # Initialize VAD
+        from realtime_agent.app.audio.vad import VoiceActivityDetector
+        vad = VoiceActivityDetector()
+        
+        # Initialize STT
+        from praxis_ai_gateway.transcription.router import select_transcriber
+        transcriber = select_transcriber({}, {})
+        await transcriber.connect({"language": None})
+        
         # Setup DB session for logging
         db = websocket.app.state.db_session_factory()
         
@@ -148,8 +157,52 @@ def create_app() -> FastAPI:
         # Initialize Manager
         from realtime_agent.app.session.manager import SessionManager
         from realtime_agent.app.session.state_machine import SessionState
+        from realtime_agent.app.interview.generation import SessionGenerationManager
+        from realtime_agent.app.interview.barge_in import BargeInController
         
         sm = SessionManager(session_id, db, enqueue_event)
+        
+        generation_manager = SessionGenerationManager()
+        barge_in_controller = BargeInController(
+            session_id=session_id,
+            generation_manager=generation_manager,
+            state_transition_cb=sm.transition,
+            enqueue_event_cb=enqueue_event
+        )
+        
+        # STT Background Event Receiver
+        async def receive_stt_events():
+            async for ev in transcriber.receive_events():
+                evt_type = "transcript.partial" if ev["is_interim"] else "transcript.final"
+                envelope = Envelope(
+                    type=evt_type,
+                    session_id=session_id,
+                    sequence=0,
+                    payload=ev
+                )
+                enqueue_event(envelope)
+                
+                # Write to transcript_segments on final
+                if not ev["is_interim"]:
+                    async with websocket.app.state.db_session_factory() as write_db:
+                        try:
+                            q = text("""
+                                INSERT INTO transcript_segments (session_id, role, text, start_ms, end_ms, confidence, source)
+                                VALUES (:sid, 'candidate', :text, :st, :en, :conf, :src)
+                            """)
+                            await write_db.execute(q, {
+                                "sid": session_id,
+                                "text": ev["text"],
+                                "st": ev["start_ms"],
+                                "en": ev["end_ms"],
+                                "conf": ev["confidence"],
+                                "src": ev["source"]
+                            })
+                            await write_db.commit()
+                        except Exception as e:
+                            logger.error(f"Failed writing transcript segment: {e}")
+
+        stt_task = asyncio.create_task(receive_stt_events())
         
         reconnect_task = None
         
@@ -173,10 +226,18 @@ def create_app() -> FastAPI:
                 # Then READY
                 await sm.transition(SessionState.READY)
                 
+            import time
+            tracer = trace.get_tracer(__name__)
+            
+            vad_speech_start_ts = None
+            
             while True:
                 message = await websocket.receive()
                 if "bytes" in message:
-                    frame_len = len(message["bytes"])
+                    ingest_ts = time.perf_counter()
+                    pcm_data = message["bytes"]
+                    frame_len = len(pcm_data)
+                    
                     ack_evt = Envelope(
                         type="audio.frame_ack",
                         session_id=session_id,
@@ -184,8 +245,62 @@ def create_app() -> FastAPI:
                         payload={"length": frame_len, "server_seq": sequence}
                     )
                     enqueue_event(ack_evt)
+                    
+                    # Feed audio to STT
+                    await transcriber.send_audio(pcm_data)
+                    
+                    # Process VAD
+                    with tracer.start_as_current_span("vad_process") as span:
+                        res, evt = vad.process_frame(pcm_data)
+                        vad_ts = time.perf_counter()
+                        span.set_attribute("latency_ms", (vad_ts - ingest_ts) * 1000)
+                        
+                        if evt:
+                            # Push event
+                            vad_envelope = Envelope(
+                                type=evt,
+                                session_id=session_id,
+                                sequence=0,
+                                payload={"confidence": res["confidence"], "energy_db": res["energy_db"]}
+                            )
+                            enqueue_event(vad_envelope)
+                            
+                            # Task 5: Barge-in trigger
+                            if evt == "speech_start":
+                                vad_speech_start_ts = time.perf_counter()
+                                if sm.sm.state == SessionState.INTERVIEWER_TURN:
+                                    logger.info("VAD detected speech during INTERVIEWER_TURN, triggering barge-in")
+                                    await barge_in_controller.trigger(reason="vad_speech_detected")
+                            
+                            elif evt == "speech_end":
+                                await transcriber.signal_segment_end()
+                                
                 elif "text" in message:
-                    pass
+                    try:
+                        import json
+                        evt_data = json.loads(message["text"])
+                        evt_type = evt_data.get("type")
+                        
+                        if evt_type == "audio.playback_stopped":
+                            # Task 3: Client confirmation
+                            payload = evt_data.get("payload", {})
+                            reason = payload.get("reason", "unknown")
+                            trigger_ts = payload.get("trigger_ts")
+                            
+                            logger.info(f"Received audio.playback_stopped confirmation. Reason: {reason}")
+                            
+                            # Complete the barge-in latency measurement chain
+                            if reason == "vad_speech_detected" and vad_speech_start_ts and trigger_ts:
+                                # We compute the end-to-end chain
+                                conf_ts = time.perf_counter()
+                                # trigger_ts from client is probably in different clock, but if it passes server time:
+                                # For our test, we'll just measure from our own vad_speech_start_ts
+                                latency = (conf_ts - vad_speech_start_ts) * 1000
+                                logger.info(f"--- BARGE-IN LATENCY CHAIN COMPLETED ---")
+                                logger.info(f"End-to-End Latency: {latency:.2f} ms")
+                                
+                    except Exception as e:
+                        logger.error(f"Failed to process text message: {e}")
                     
         except WebSocketDisconnect:
             logger.info("Client disconnected normally")
@@ -193,6 +308,8 @@ def create_app() -> FastAPI:
             logger.error(f"WS error: {e}")
         finally:
             sender_task.cancel()
+            stt_task.cancel()
+            await transcriber.close()
             
             # The websocket dropped or finished.
             # Are we cleanly STOPPED or FAILED?

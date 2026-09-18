@@ -75,7 +75,7 @@ export default function PracticeArena() {
           // Convert Float32Array to Int16Array for basic transmission
           const int16Array = new Int16Array(inputData.length);
           for (let i = 0; i < inputData.length; i++) {
-            let s = Math.max(-1, Math.min(1, inputData[i]));
+            const s = Math.max(-1, Math.min(1, inputData[i]));
             int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
           }
           ws.send(int16Array.buffer);

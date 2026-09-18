@@ -1,0 +1,22 @@
+[
+  {
+    "claim": "I migrated the database from MySQL to PostgreSQL with zero downtime.",
+    "context": "Led the migration of the primary user database from MySQL to PostgreSQL, achieving zero downtime by using dual writes.",
+    "expected_supported": true
+  },
+  {
+    "claim": "I increased conversion by 50%.",
+    "context": "Worked as a backend engineer maintaining legacy APIs.",
+    "expected_supported": false
+  },
+  {
+    "claim": "I managed a team of 10 engineers.",
+    "context": "Individual contributor on a 10-person engineering team.",
+    "expected_supported": false
+  },
+  {
+    "claim": "I built a CI/CD pipeline using GitHub Actions.",
+    "context": "Migrated deployment workflows to GitHub Actions, reducing build times by 20%.",
+    "expected_supported": true
+  }
+]

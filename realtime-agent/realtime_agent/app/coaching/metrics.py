@@ -1,40 +1,66 @@
-import logging
-import time
-from typing import Dict
+import re
+import yaml
+import os
+from typing import List, Set, Dict, Any
 
-logger = logging.getLogger(__name__)
+def load_coaching_config() -> Dict[str, Set[str]]:
+    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "config", "coaching.yaml")
+    try:
+        with open(config_path, "r") as f:
+            data = yaml.safe_load(f)
+            return {
+                "fillers": set(data.get("fillers", [])),
+                "hedges": set(data.get("hedges", []))
+            }
+    except Exception:
+        return {"fillers": {"um", "uh", "like", "you know"}, "hedges": {"i think", "maybe"}}
 
-class CoachingMetricsExtractor:
-    """
-    Pure-DSP feature extraction. NO LLM INVOLVED.
-    Computes WPM, filler rates, and pauses in single-digit milliseconds.
-    """
-    def __init__(self):
-        self.filler_words = {"um", "uh", "like", "you know", "sort of", "basically", "literally"}
-        self.total_words = 0
-        self.filler_count = 0
-        self.start_time = time.time()
-        self.last_pause_duration_ms = 0
-        
-    def process_transcript_chunk(self, partial_text: str) -> Dict:
-        """
-        Called incrementally as the STT pipeline emits words.
-        """
-        start = time.perf_counter()
-        
-        words = partial_text.lower().split()
-        self.total_words = len(words)
-        self.filler_count = sum(1 for w in words if w in self.filler_words)
-        
-        elapsed_minutes = (time.time() - self.start_time) / 60.0
-        wpm = (self.total_words / elapsed_minutes) if elapsed_minutes > 0 else 0
-        
-        latency = (time.perf_counter() - start) * 1000
-        # logger.debug(f"DSP Coaching Metrics extracted in {latency:.3f}ms")
-        
-        return {
-            "wpm": round(wpm),
-            "filler_count": self.filler_count,
-            "filler_rate_pct": round((self.filler_count / self.total_words) * 100) if self.total_words > 0 else 0,
-            "last_pause_ms": self.last_pause_duration_ms
-        }
+def compute_wpm(word_count: int, duration_ms: int) -> float:
+    """Computes words per minute. Returns 0.0 if duration is 0."""
+    if duration_ms <= 0:
+        return 0.0
+    minutes = duration_ms / 60000.0
+    return word_count / minutes
+
+def tokenize_text(text: str) -> List[str]:
+    """Simple whitespace and punctuation tokenizer."""
+    text = text.lower()
+    text = re.sub(r'[^\w\s]', ' ', text)
+    return text.split()
+
+def compute_filler_rate(text: str, filler_list: Set[str]) -> Dict[str, Any]:
+    text_lower = text.lower()
+    breakdown = {filler: 0 for filler in filler_list}
+    total = 0
+    padded_text = f" {re.sub(r'[^\w\s]', ' ', text_lower)} "
+    for filler in filler_list:
+        count = padded_text.count(f" {filler} ")
+        if count > 0:
+            breakdown[filler] = count
+            total += count
+    return {"total": total, "breakdown": {k: v for k, v in breakdown.items() if v > 0}}
+
+def compute_pause_stats(vad_silence_gaps: List[int], turn_duration_ms: int) -> Dict[str, Any]:
+    count = len(vad_silence_gaps)
+    longest = max(vad_silence_gaps) if count > 0 else 0
+    total_silence = sum(vad_silence_gaps)
+    ratio = (total_silence / turn_duration_ms) if turn_duration_ms > 0 else 0.0
+    return {
+        "count": count,
+        "longest_pause_ms": longest,
+        "pause_ratio": ratio
+    }
+
+def compute_hedge_count(text: str, hedge_list: Set[str]) -> int:
+    text_lower = text.lower()
+    padded_text = f" {re.sub(r'[^\w\s]', ' ', text_lower)} "
+    count = 0
+    for hedge in hedge_list:
+        count += padded_text.count(f" {hedge} ")
+    return count
+
+def compute_time_to_first_word(question_end_ts: float, first_word_ts: float) -> float:
+    if question_end_ts <= 0 or first_word_ts <= 0:
+        return 0.0
+    diff = first_word_ts - question_end_ts
+    return max(0.0, diff * 1000.0)

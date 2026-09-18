@@ -1,0 +1,10 @@
+[
+  {"input": "Tell me about a time you had a conflict with a coworker.", "expected": "behavioral"},
+  {"input": "Walk me through the architecture of your distributed cache project.", "expected": "project"},
+  {"input": "Write a function to reverse a linked list.", "expected": "coding"},
+  {"input": "Write a query to find the second highest salary.", "expected": "sql"},
+  {"input": "How would you design a scalable URL shortener?", "expected": "system_design"},
+  {"input": "What is the difference between L1 and L2 regularization?", "expected": "ml"},
+  {"input": "Could you clarify what you meant by scalable?", "expected": "clarification"},
+  {"input": "Why did you choose Redis over Memcached for that?", "expected": "follow_up"}
+]
