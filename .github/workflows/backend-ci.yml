@@ -31,34 +31,32 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
-        cache: 'pip'
+        python-version: "3.11"
         
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r backend/requirements.txt || pip install pytest pytest-asyncio sqlalchemy asyncpg psycopg2-binary
-        pip install -e backend/ || echo "backend package not installable in editable mode, using PYTHONPATH"
+        pip install uv
+        uv pip install --system -r backend/requirements.txt
         
-    - name: Run Migrations
+    - name: Run Database Migrations
       env:
-        DATABASE_URL: "postgresql://praxis:dev_password@localhost:5432/praxis"
+        DATABASE_URL: postgresql://praxis:dev_password@localhost:5432/praxis
       run: |
         python scripts/migrate.py
         
-    - name: Run RLS CI Guard Tests (Sync)
+    - name: Run RLS Test Suite
       env:
-        DATABASE_URL: "postgresql://praxis:dev_password@localhost:5432/praxis"
+        DATABASE_URL: postgresql://praxis:dev_password@localhost:5432/praxis
         PYTHONPATH: "."
       run: |
         pytest tests/security/test_rls_enabled.py
         pytest tests/security/test_rls_isolation.py
-
-    - name: Run RLS Isolation Tests (Async)
-      env:
-        DATABASE_URL: "postgresql+asyncpg://praxis:dev_password@localhost:5432/praxis"
-        PYTHONPATH: "."
-      run: |
         pytest backend/tests/security/test_rls_isolation.py
         pytest backend/tests/security/test_rls_storage.py
         pytest backend/tests/integration/test_rls_bypass.py
+        
+    - name: Run Boundary Checks
+      run: |
+        python scripts/check_gateway_boundary.py
+        python scripts/check_prompt_construction_boundary.py

@@ -115,3 +115,33 @@ def test_full_deletion_cascade(db_conn):
     assert res[0] is None, "source_chunk_id was not set to NULL! FK constraint broken."
 
     print("SUCCESS: Full deletion cascade round-tripped perfectly, including cross-candidate SET NULL edge case.")
+
+def test_real_deletion_job(db_conn):
+    import asyncio
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from backend.app.worker_tasks import delete_candidate_account_job
+    
+    async def run_test():
+        engine = create_async_engine(DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://'))
+        ctx = {'db_engine': engine}
+        
+        user_id = str(uuid.uuid4())
+        cand_id = str(uuid.uuid4())
+        job_id = str(uuid.uuid4())
+        
+        cur = db_conn.cursor()
+        cur.execute("INSERT INTO auth.users (id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
+        cur.execute("INSERT INTO profiles (id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
+        cur.execute("INSERT INTO candidates (id, profile_id, full_name) VALUES (%s, %s, 'Test')", (cand_id, user_id))
+        cur.execute("INSERT INTO deletion_jobs (id, profile_id, candidate_id, status) VALUES (%s, %s, %s, 'pending')", (job_id, user_id, cand_id))
+        
+        await delete_candidate_account_job(ctx, deletion_job_id=job_id, candidate_id=cand_id)
+        
+        cur.execute("SELECT status FROM deletion_jobs WHERE id = %s", (job_id,))
+        status = cur.fetchone()[0]
+        assert status == 'completed', f"Expected completed, got {status}"
+        
+        cur.execute("SELECT count(*) FROM candidates WHERE id = %s", (cand_id,))
+        assert cur.fetchone()[0] == 0, "Candidate was not deleted"
+        
+    asyncio.run(run_test())

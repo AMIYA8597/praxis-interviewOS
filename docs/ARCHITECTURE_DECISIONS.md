@@ -333,3 +333,9 @@ We deleted the custom jitter buffer and sequence reordering logic in `transport.
 **Date:** 2026-09-20
 **Context:** Migrated Next.js dashboard pages (Analytics, Candidates, Study Workbench, Platform Tracker) used inconsistent light-theme styling (bg-white, text-gray-600) compared to the overarching dark, dense aesthetic of the desktop and web shell layout (bg-gray-950).
 **Decision:** We programmatically migrated all light-theme utility classes in pps/web/src/app/(dashboard) to their dark-theme equivalents (e.g. bg-gray-900, text-gray-400, border-gray-800) to ensure a cohesive and dense dark aesthetic across the entire application interface.
+
+## ADR-021: Server-Side Screenshot Extraction
+**Date:** 2026-09-20
+**Context:** When a user captures a screenshot for the hint ladder feature, we had to decide whether to perform local OCR on the client (desktop app) and send the extracted text, or send the raw image to the server for centralized OCR and multimodal processing.
+**Decision:** We chose Server-Side Extraction (Option A). The desktop app sends the raw base64 image data to the server (/study/screenshots/solve), and the server orchestrates the OCR extraction (un_local_ocr) alongside classification and deep reasoning.
+**Rationale:** Centralizing the OCR extraction pipeline on the server makes vision escalation strictly a server-level decision rather than shipping local heuristic branching rules in the desktop app. It allows us to upgrade extraction quality without asking users to redownload the application.

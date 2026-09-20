@@ -7,7 +7,7 @@ If `dev.ps1` fails with an `[Errno 98] Address already in use` error:
 
 ## Python ModuleNotFoundError
 If you see `No module named 'packages'`:
-- The backend scripts rely on `PYTHONPATH`. Our `test.ps1` script handles this automatically, but if you run tests manually, ensure you set `$env:PYTHONPATH = "d:\work\interviewOS\backend;d:\work\interviewOS\realtime-agent"`.
+- The backend scripts rely on `PYTHONPATH`. Our `test.ps1` script handles this automatically, but if you run tests manually, ensure you set `$env:PYTHONPATH = "./backend;./realtime-agent"`.
 
 ## VAD ONNX Errors
 If Silero VAD crashes on boot:

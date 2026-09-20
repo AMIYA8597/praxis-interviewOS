@@ -88,7 +88,7 @@ class WorkerSettings:
     from praxis_ai_gateway.tasks import check_provider_health
     from backend.app.workers.document_worker import process_document
     from backend.app.workers.embedding_worker import generate_embeddings
-    from backend.app.worker_tasks import analyze_job, cleanup_old_sessions, purge_expired_retention_data, delete_candidate_account_job, process_resume
+    from backend.app.worker_tasks import analyze_job, cleanup_old_sessions, purge_expired_retention_data, delete_candidate_account_job, process_resume, generate_study_material_job
 
     
     functions = [
@@ -101,7 +101,8 @@ class WorkerSettings:
         process_resume,
         analyze_job,
         cleanup_old_sessions,
-        purge_expired_retention_data
+        purge_expired_retention_data,
+        generate_study_material_job
     ]
     
     # Register scheduled background jobs

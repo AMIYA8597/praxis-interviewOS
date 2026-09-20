@@ -10,16 +10,42 @@ class GenerateMaterialRequest(BaseModel):
     difficulty: str
 
 class SolveScreenshotRequest(BaseModel):
-    extracted_text: str
+    image_base64: str
     screenshot_task_id: str
 
 @router.get("/study/materials")
-async def get_study_materials(candidate: dict = Depends(get_current_candidate)):
-    return {"materials": []}
+async def get_study_materials(
+    candidate: dict = Depends(get_current_candidate),
+    gateway = Depends(get_ai_gateway)
+):
+    from sqlalchemy import text
+    query = text("""
+        SELECT id, topic, source, prompt, reference_answer, difficulty, created_at, next_review_at
+        FROM study_items 
+        WHERE candidate_id = :cid 
+        ORDER BY created_at DESC
+    """)
+    res = await gateway.db.execute(query, {"cid": candidate["id"]})
+    rows = res.fetchall()
+    return {"materials": [dict(r._mapping) for r in rows]}
 
 @router.post("/study/generate")
-async def generate_study_material(req: GenerateMaterialRequest, candidate: dict = Depends(get_current_candidate)):
-    return {"status": "queued", "task_id": "stub_task_id"}
+async def generate_study_material(
+    req: GenerateMaterialRequest, 
+    request: Request,
+    candidate: dict = Depends(get_current_candidate)
+):
+    import uuid
+    task_id = str(uuid.uuid4())
+    if hasattr(request.app.state, 'arq_pool'):
+        await request.app.state.arq_pool.enqueue_job(
+            "generate_study_material_job", 
+            req.topic, 
+            req.difficulty, 
+            candidate["id"], 
+            task_id
+        )
+    return {"status": "queued", "task_id": task_id}
 
 @router.post("/study/screenshots/solve")
 async def solve_screenshot_endpoint(
@@ -29,9 +55,21 @@ async def solve_screenshot_endpoint(
 ):
     from realtime_agent.app.study.solver import solve_screenshot
     from praxis_ai_gateway.router import RoutingContext
+    import base64
+    from praxis_ai_gateway.vision.ocr_pipeline import process_screenshot_hybrid
     
     ctx = RoutingContext(user_id=candidate["profile_id"], session_id=req.screenshot_task_id)
-    result = await solve_screenshot(req.extracted_text, req.screenshot_task_id, gateway, ctx)
+    
+    # Extract base64 part if it contains the data URI scheme
+    b64_str = req.image_base64
+    if "," in b64_str:
+        b64_str = b64_str.split(",", 1)[1]
+    image_bytes = base64.b64decode(b64_str)
+    
+    analysis = await process_screenshot_hybrid(image_bytes, gateway, ctx)
+    extracted_text = analysis.extracted_text
+    
+    result = await solve_screenshot(extracted_text, req.screenshot_task_id, gateway, ctx)
     return result
 
 @router.post("/study/items/from-solve/{solver_result_id}")

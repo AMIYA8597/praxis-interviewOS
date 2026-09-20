@@ -16,7 +16,7 @@ export function useScreenshotUpload() {
             'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
           },
           body: JSON.stringify({
-            extracted_text: screenshotBase64, // Sending base64 as extracted text for now to match schema
+            image_base64: screenshotBase64,
             screenshot_task_id: "manual-capture-" + Date.now()
           })
         }

@@ -9,10 +9,10 @@ class OcrResult(BaseModel):
     confidence: float
     is_diagram_heuristic: bool
 
-# Stub for local OCR engine (e.g., Tesseract or PaddleOCR)
+# Real local OCR engine (Tesseract)
 def run_local_ocr(image_bytes: bytes) -> OcrResult:
     """
-    Mock local OCR engine (Tesseract 5 or PaddleOCR).
+    Local OCR engine using Tesseract via pytesseract.
     """
     # Test fixture routing
     if b"mock_diagram" in image_bytes:
@@ -30,7 +30,36 @@ def run_local_ocr(image_bytes: bytes) -> OcrResult:
             is_diagram_heuristic=False
         )
     
-    return OcrResult(text="", confidence=0.0, is_diagram_heuristic=True)
+    try:
+        import pytesseract
+        from PIL import Image
+        import io
+        
+        img = Image.open(io.BytesIO(image_bytes))
+        # Get OCR data dict to extract text and confidences
+        data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+        
+        text_parts = []
+        confidences = []
+        
+        for i in range(len(data['text'])):
+            t = data['text'][i].strip()
+            conf = int(data['conf'][i])
+            if t and conf > -1:
+                text_parts.append(t)
+                confidences.append(conf)
+                
+        text = " ".join(text_parts)
+        # Average confidence
+        avg_conf = sum(confidences) / len(confidences) / 100.0 if confidences else 0.0
+        
+        # Simple heuristic: if there's very little text but a large image, it might be a diagram
+        is_diagram_heuristic = len(text) < 20
+        
+        return OcrResult(text=text, confidence=avg_conf, is_diagram_heuristic=is_diagram_heuristic)
+    except Exception as e:
+        logger.error(f"Local OCR failed: {e}")
+        return OcrResult(text="", confidence=0.0, is_diagram_heuristic=True)
 
 class HybridPipelineResponse(BaseModel):
     extracted_text: str

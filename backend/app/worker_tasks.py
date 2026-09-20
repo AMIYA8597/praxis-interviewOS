@@ -294,3 +294,44 @@ async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str
                 ), {"id": deletion_job_id, "err": str(e)})
             raise
 
+
+async def generate_study_material_job(ctx: Dict[str, Any], topic: str, difficulty: str, candidate_id: str, task_id: str, trace_carrier: dict = None):
+    db = ctx['db_engine']
+    redis = ctx.get('redis')
+    from praxis_ai_gateway.router import GatewayRouter, RoutingContext
+    from praxis_ai_gateway.registry import ModelRegistry
+    from praxis_ai_gateway.base import LLMMessage
+    from pydantic import BaseModel
+    import uuid
+
+    providers = ctx.get('providers', {})
+    router = GatewayRouter(ModelRegistry(), providers, redis, db)
+    route_ctx = RoutingContext(user_id=candidate_id)
+
+    class GeneratedMaterial(BaseModel):
+        prompt: str
+        reference_answer: str
+
+    messages = [
+        LLMMessage(role="system", content="Generate a study question and a comprehensive reference answer for a technical interview."),
+        LLMMessage(role="user", content=f"Topic: {topic}, Difficulty: {difficulty}")
+    ]
+    
+    try:
+        resp = await router.route("reasoning", route_ctx, "structured", messages, schema=GeneratedMaterial)
+        parsed: GeneratedMaterial = resp.result
+        
+        async with db.begin() as conn:
+            await conn.execute(text("""
+                INSERT INTO study_items (id, candidate_id, topic, source, prompt, reference_answer, difficulty)
+                VALUES (:id, :cid, :topic, 'generated', :prompt, :ref_ans, :diff)
+            """), {
+                "id": str(uuid.uuid4()),
+                "cid": candidate_id,
+                "topic": topic,
+                "prompt": parsed.prompt,
+                "ref_ans": parsed.reference_answer,
+                "diff": difficulty
+            })
+    except Exception as e:
+        logger.error(f"Failed to generate study material: {e}")

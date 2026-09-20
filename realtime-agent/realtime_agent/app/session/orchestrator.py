@@ -35,6 +35,24 @@ class SessionOrchestrator:
         
         from realtime_agent.app.interview.turn_detection import TurnEndDetector
         self.turn_detector = TurnEndDetector(router=self.gateway)
+        from praxis_ai_gateway.classification import FastClassifier
+        self.classifier = FastClassifier(router=self.gateway)
+        
+        from realtime_agent.app.coaching.accumulator import CoachingMetricsAccumulator
+        self.coaching = CoachingMetricsAccumulator(
+            session_id=self.session_manager.session_id,
+            enqueue_event_cb=lambda env, critical=False: self.enqueue_event(env, critical=critical)
+        )
+
+    async def start_candidate_turn(self):
+        await self.session_manager.transition(SessionState.CANDIDATE_TURN)
+        self.coaching.start_turn()
+
+    def handle_vad_event(self, evt: str):
+        self.coaching.register_vad_event(evt)
+        
+    def handle_transcript_update(self, text: str):
+        self.coaching.update_text(text)
         
     async def handle_vad_silence(self, vad_silence_ms: int, partial_transcript: str) -> None:
         """Called by the WebSocket handler (Phase 2.12) to evaluate turn completeness."""
@@ -62,14 +80,29 @@ class SessionOrchestrator:
         # Task 5: Enqueue text event
         text_evt = Envelope(
             type="interviewer.text",
-            session_id="placeholder", # Will be properly routed by transport
+            session_id=self.session_manager.session_id, # Will be properly routed by transport
             sequence=0,
             payload={"text": decision.response_text}
         )
         self.enqueue_event(text_evt, critical=True)
         
         # Task 3: Start generation
-        gen_ctx = self.generation_manager.start_generation(turn_id="new_turn")
+        import uuid
+        turn_id = str(uuid.uuid4())
+        
+        from sqlalchemy import text
+        query_turn = text("""
+            INSERT INTO session_turns (id, session_id, speaker, text_content, started_at, ended_at)
+            VALUES (:id, :sid, 'interviewer', :text, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """)
+        await self.session_manager.db.execute(query_turn, {
+            "id": turn_id,
+            "sid": self.session_manager.session_id,
+            "text": decision.response_text
+        })
+        await self.session_manager.db.commit()
+        
+        gen_ctx = self.generation_manager.start_generation(turn_id=turn_id)
         
         # Task 4: Stream through TTS
         async def text_iterator():
@@ -100,9 +133,19 @@ class SessionOrchestrator:
         
         # 1. State machine transition -> TURN_END
         await self.session_manager.transition(SessionState.TURN_END)
+        self.coaching.end_turn()
         self.current_candidate_answer = getattr(self, "current_candidate_answer", "") + " " + final_text
         self.current_candidate_answer = self.current_candidate_answer.strip()
         
+                # Classify turn
+        last_question = getattr(self, "last_interviewer_question", "")
+        classification = await self.classifier.classify(self.current_candidate_answer, last_question)
+        if not classification.is_question:
+            import logging
+            logging.getLogger(__name__).info("Candidate utterance was a short affirmation. Blocking scoring.")
+            await self.session_manager.transition(SessionState.AWAITING_ANSWER)
+            return
+
         # Transition -> SCORING
         await self.session_manager.transition(SessionState.SCORING)
         
@@ -223,3 +266,7 @@ class SessionOrchestrator:
         
         # 5. Transition to STOPPED
         await self.session_manager.transition(SessionState.STOPPED)
+
+
+
+

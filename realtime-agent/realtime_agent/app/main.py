@@ -239,6 +239,9 @@ def create_app() -> FastAPI:
                 # Update transcript
                 state_vars["current_transcript"] = ev.get("text", "")
                 
+                # Send to CoachingMetricsAccumulator
+                orchestrator.handle_transcript_update(state_vars["current_transcript"])
+                
                 envelope = Envelope(
                     type=evt_type,
                     session_id=session_id,
@@ -248,7 +251,7 @@ def create_app() -> FastAPI:
                 enqueue_event(envelope)
                 
                 if sm.sm.state == SessionState.AWAITING_ANSWER:
-                    await sm.transition(SessionState.CANDIDATE_TURN)
+                    await orchestrator.start_candidate_turn()
                 
                 # Write to transcript_segments on final
                 if not ev["is_interim"]:
@@ -338,12 +341,15 @@ def create_app() -> FastAPI:
                             )
                             enqueue_event(vad_envelope)
                             
+                            # Send to CoachingMetricsAccumulator
+                            orchestrator.handle_vad_event(evt)
+                            
                             # Task 5: Barge-in trigger
                             if evt == "speech_start":
                                 vad_speech_start_ts = time.perf_counter()
                                 vad_speech_end_ts = None
                                 if sm.sm.state == SessionState.AWAITING_ANSWER:
-                                    await sm.transition(SessionState.CANDIDATE_TURN)
+                                    await orchestrator.start_candidate_turn()
                                 elif sm.sm.state == SessionState.INTERVIEWER_TURN:
                                     logger.info("VAD detected speech during INTERVIEWER_TURN, triggering barge-in")
                                     await barge_in_controller.trigger(reason="vad_speech_detected")
