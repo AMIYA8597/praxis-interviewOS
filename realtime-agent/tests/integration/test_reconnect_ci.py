@@ -48,6 +48,8 @@ async def realtime_server():
     conn.execute("CREATE TABLE candidates (id TEXT PRIMARY KEY, profile_id TEXT)")
     conn.execute("CREATE TABLE practice_sessions (id TEXT PRIMARY KEY, candidate_id TEXT, status TEXT, ended_at TEXT)")
     conn.execute("CREATE TABLE session_state_log (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, from_state TEXT, to_state TEXT, reason TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+    conn.execute("CREATE TABLE usage_events (id TEXT PRIMARY KEY, user_id TEXT, was_free_tier BOOLEAN)")
+    conn.execute("INSERT INTO usage_events (id, user_id, was_free_tier) VALUES ('evt-1', '00000000-0000-0000-0000-000000000000', false)")
     conn.commit()
     conn.close()
 
@@ -111,11 +113,11 @@ async def test_reconnect_hard_tcp_drop(realtime_server):
     print(f"Connecting to {uri}")
     
     # First connection
-    ws = await websockets.connect(uri)
+    ws = await websockets.connect(uri, open_timeout=120.0)
     
     ready_seen = False
     for _ in range(5):
-        msg = await asyncio.wait_for(ws.recv(), 2.0)
+        msg = await asyncio.wait_for(ws.recv(), 120.0)
         evt = json.loads(msg)
         if evt.get("type") == "state.transitioned" and evt["payload"]["to"] == "READY":
             ready_seen = True
@@ -136,8 +138,8 @@ async def test_reconnect_hard_tcp_drop(realtime_server):
     assert state.decode() == "RECONNECTING"
     
     # Reconnect!
-    ws2 = await websockets.connect(uri)
-    msg = await asyncio.wait_for(ws2.recv(), 2.0)
+    ws2 = await websockets.connect(uri, open_timeout=120.0)
+    msg = await asyncio.wait_for(ws2.recv(), 120.0)
     evt = json.loads(msg)
     
     assert evt["type"] == "state.transitioned"

@@ -74,9 +74,27 @@ def create_app() -> FastAPI:
         trace.set_tracer_provider(provider)
         app.state.tracer_provider = provider
         
-        from backend.app.dependencies import AIGatewayStub, ObjectStorageStub
-        app.state.ai_gateway = AIGatewayStub()
-        app.state.object_storage = ObjectStorageStub()
+        from backend.storage.local import get_object_storage
+        app.state.object_storage = get_object_storage()
+        
+        from praxis_ai_gateway.registry import ModelRegistry
+        from praxis_ai_gateway.providers.openai import OpenAIProvider
+        from praxis_ai_gateway.providers.ollama import OllamaProvider
+        from praxis_ai_gateway.router import GatewayRouter
+        
+        registry = ModelRegistry("config/models.yaml")
+        
+        providers = {}
+        if os.environ.get("OPENAI_API_KEY"):
+            providers["openai"] = OpenAIProvider()
+        providers["ollama"] = OllamaProvider()
+        
+        app.state.ai_gateway = GatewayRouter(
+            registry=registry,
+            providers=providers,
+            redis=app.state.redis_pool,
+            db=None
+        )
         
         logger.info(
             "backend_ready: db=connected, redis=connected, telemetry=initialized, env=%s",

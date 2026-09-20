@@ -265,3 +265,32 @@ async def purge_expired_retention_data(ctx: Dict[str, Any]):
                 INSERT INTO privacy_events (candidate_id, action, entity_type, details)
                 VALUES (:cid, 'retention_purge', 'documents', 'Purged expired document ' || :path)
             """), {"cid": doc.candidate_id, "path": doc.storage_path})
+
+async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str, candidate_id: str, trace_carrier: dict = None):
+    """
+    Background job to execute the deletion cascade for a candidate.
+    """
+    otel_ctx = extract(trace_carrier or {})
+    with tracer.start_as_current_span("delete_candidate_account_job", context=otel_ctx) as span:
+        span.set_attribute("candidate_id", candidate_id)
+        
+        db = ctx['db_engine']
+        from backend.storage.local import get_object_storage
+        storage = get_object_storage()
+        
+        from backend.app.core.deletion import DeletionService
+        # Run deletion logic within a dedicated service for better unit testability
+        service = DeletionService(db=db, storage_client=storage)
+        try:
+            await service.process_deletion_job(candidate_id)
+            async with db.begin() as conn:
+                await conn.execute(text(
+                    "UPDATE deletion_jobs SET status = 'completed', rows_deleted_summary = '{}', updated_at = NOW() WHERE id = :id"
+                ), {"id": deletion_job_id})
+        except Exception as e:
+            async with db.begin() as conn:
+                await conn.execute(text(
+                    "UPDATE deletion_jobs SET status = 'failed', error_message = :err, updated_at = NOW() WHERE id = :id"
+                ), {"id": deletion_job_id, "err": str(e)})
+            raise
+

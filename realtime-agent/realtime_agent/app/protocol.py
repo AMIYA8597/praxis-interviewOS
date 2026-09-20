@@ -7,17 +7,30 @@ class Envelope(BaseModel):
     type: Literal[
         "session.ready",
         "session.error",
+        "system.alert",
         "audio.frame_ack",
         "state.transitioned",
         "provider.changed",
         "session.degraded",
         "session.stopped",
         "audio.stop_playback",
+        
+        # Coaching
         "coaching.metrics",
+        
+        # STT/VAD
         "transcript.partial",
         "transcript.final",
         "speech_start",
-        "speech_end"
+        "speech_end",
+        
+        # TTS / Interviewer
+        "interviewer.text",
+        "interviewer.audio_ready",
+        
+        # Turn Scoring & Debrief
+        "turn.scoring_result",
+        "debrief.ready"
     ]
     session_id: str
     sequence: int

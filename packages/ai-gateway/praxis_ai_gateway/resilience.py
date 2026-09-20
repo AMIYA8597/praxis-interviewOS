@@ -123,8 +123,8 @@ async def with_retries(
             
             # Async sleep allowing cancellation
             sleep_task = asyncio.create_task(asyncio.sleep(delay / 1000.0))
-            if hasattr(cancellation_token, "wait"):
-                cancel_task = asyncio.create_task(cancellation_token.wait())
+            if hasattr(cancellation_token, "wait_cancelled"):
+                cancel_task = asyncio.create_task(cancellation_token.wait_cancelled())
                 done, pending = await asyncio.wait([sleep_task, cancel_task], return_when=asyncio.FIRST_COMPLETED)
                 for p in pending: p.cancel()
                 if cancel_task in done:

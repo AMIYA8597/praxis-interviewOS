@@ -10,7 +10,7 @@ from backend.app.schemas.common import PaginatedResponse
 
 router = APIRouter(tags=['jobs'])
 
-@router.post("", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/jobs", status_code=status.HTTP_202_ACCEPTED)
 async def create_job(
     request: Request,
     job_data: JobCreate,
@@ -39,7 +39,7 @@ async def create_job(
     
     return {"id": job_id, "status": "analyzing", "message": "Job accepted for analysis"}
 
-@router.get("", response_model=PaginatedResponse[JobResponse])
+@router.get("/jobs", response_model=PaginatedResponse[JobResponse])
 async def list_jobs(
     cursor: Optional[str] = Query(None, description="Cursor formatted as 'timestamp_uuid'"),
     limit: int = Query(20, ge=1, le=100),
@@ -79,7 +79,7 @@ async def list_jobs(
         
     return {"items": items, "next_cursor": next_cursor}
 
-@router.get("/{id}", response_model=dict)
+@router.get("/jobs/{id}", response_model=dict)
 async def get_job(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),

@@ -6,9 +6,7 @@ from praxis_ai_gateway.prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)
 
-# Global mock DB
-_SOLVER_DB: List[SolverResult] = []
-_STUDY_DB: List[StudyItem] = []
+
 
 async def classify_screenshot(extracted_text: str, gateway_router, routing_ctx) -> ScreenshotType:
     """
@@ -68,38 +66,72 @@ async def generate_hint_ladder(extracted_text: str, screenshot_type: ScreenshotT
         logger.error(f"Failed to generate hint ladder: {e}")
         return HintLadder(clarify="Error", approach="Error", solution="Error")
 
-async def solve_screenshot(extracted_text: str, gateway_router, routing_ctx) -> SolverResult:
+async def solve_screenshot(extracted_text: str, screenshot_task_id: str, gateway_router, routing_ctx) -> dict:
     """
-    Coordinates classification and hint ladder generation.
+    Coordinates classification and hint ladder generation, saves to DB.
     """
     screenshot_type = await classify_screenshot(extracted_text, gateway_router, routing_ctx)
     hints = await generate_hint_ladder(extracted_text, screenshot_type, gateway_router, routing_ctx)
     
-    solver_result = SolverResult(
-        id=str(uuid.uuid4()),
-        screenshot_type=screenshot_type,
-        hints=hints
-    )
-    _SOLVER_DB.append(solver_result)
-    return solver_result
+    import json
+    from sqlalchemy import text
+    query = text("""
+        INSERT INTO solver_results (screenshot_task_id, screenshot_type, hints)
+        VALUES (:tid, :stype, :hints)
+        RETURNING id
+    """)
+    res = await gateway_router.db.execute(query, {
+        "tid": screenshot_task_id,
+        "stype": screenshot_type.value if hasattr(screenshot_type, "value") else str(screenshot_type),
+        "hints": json.dumps(hints.model_dump())
+    })
+    await gateway_router.db.commit()
+    inserted_id = res.scalar()
+    
+    return {
+        "id": str(inserted_id),
+        "screenshot_type": screenshot_type,
+        "hints": hints
+    }
 
-def create_study_item_from_solve(solver_result_id: str) -> StudyItem:
+async def create_study_item_from_solve(solver_result_id: str, candidate_id: str, db) -> dict:
     """
     Task 6: Save to Study Plan Integration.
     """
-    solver_result = next((r for r in _SOLVER_DB if r.id == solver_result_id), None)
-    if not solver_result:
+    from sqlalchemy import text
+    import json
+    
+    # Get solver result
+    query = text("SELECT hints FROM solver_results WHERE id = :id")
+    res = await db.execute(query, {"id": solver_result_id})
+    row = res.fetchone()
+    if not row:
         raise ValueError(f"No solver result found for id {solver_result_id}")
         
-    # Extract the core concept from the level 1 (clarify) hint.
-    # We will just use the first sentence or so.
-    concept = solver_result.hints.clarify.split(".")[0]
+    hints_dict = row[0]
+    if isinstance(hints_dict, str):
+        hints_dict = json.loads(hints_dict)
+        
+    concept = hints_dict.get("clarify", "Unknown").split(".")[0]
     
-    item = StudyItem(
-        id=str(uuid.uuid4()),
-        source="screenshot_solve",
-        solver_result_id=solver_result_id,
-        concept=concept
-    )
-    _STUDY_DB.append(item)
-    return item
+    # Save to study items
+    insert_q = text("""
+        INSERT INTO study_items (candidate_id, topic, source, prompt, solver_result_id)
+        VALUES (:cid, :topic, 'screenshot_solve', :prompt, :sid)
+        RETURNING id
+    """)
+    res_ins = await db.execute(insert_q, {
+        "cid": candidate_id,
+        "topic": concept,
+        "prompt": hints_dict.get("approach", ""),
+        "sid": solver_result_id
+    })
+    await db.commit()
+    item_id = res_ins.scalar()
+    
+    return {
+        "id": str(item_id),
+        "source": "screenshot_solve",
+        "solver_result_id": solver_result_id,
+        "concept": concept
+    }

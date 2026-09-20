@@ -1,8 +1,10 @@
 import logging
+from praxis_ai_gateway.router import GatewayRouter, RoutingContext
+from praxis_ai_gateway.base import LLMMessage
 
 logger = logging.getLogger(__name__)
 
-async def generate_cold_outreach(candidate_id: str, company: str, detail: str, gateway_router, routing_ctx) -> str:
+async def generate_cold_outreach(candidate_id: str, company: str, detail: str, gateway_router: GatewayRouter, routing_ctx: RoutingContext) -> str:
     """
     Generates cold outreach messages.
     System prompt strictly forbids hallucinating recipient names or unearned candidate skills.
@@ -10,7 +12,21 @@ async def generate_cold_outreach(candidate_id: str, company: str, detail: str, g
     """
     logger.info(f"Drafting outreach for {company}")
     
-    # provider = gateway_router.route("reasoning", routing_ctx)
-    # prompt = "Draft a cold message. Do NOT invent a hiring manager's name if not provided."
+    prompt = f"""
+    Draft a cold outreach message for {company}.
+    Context about why I am reaching out: {detail}.
     
-    return f"Hi Team at {company},\n\nI noticed you are scaling your realtime infrastructure ({detail}). I recently reduced latency by 40% on a similar Kafka pipeline and would love to connect."
+    CRITICAL INSTRUCTIONS:
+    - DO NOT invent or hallucinate a hiring manager's name. Use a generic greeting like 'Hi Team' if no name is provided.
+    - DO NOT invent unearned candidate skills. Base it only on standard professional courtesy.
+    - Keep it concise, under 4 sentences.
+    """
+    
+    messages = [LLMMessage(role="user", content=prompt)]
+    
+    try:
+        resp = await gateway_router.route("reasoning", routing_ctx, "generate", messages=messages)
+        return resp.result
+    except Exception as e:
+        logger.error(f"Failed to generate outreach: {e}")
+        return "Draft generation failed. Please try again."

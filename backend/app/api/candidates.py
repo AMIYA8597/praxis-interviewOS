@@ -6,7 +6,7 @@ from backend.app.schemas.candidate import CandidateResponse, CandidateUpdate
 
 router = APIRouter(tags=['candidates'])
 
-@router.get("/me", response_model=CandidateResponse)
+@router.get("/candidates/me", response_model=CandidateResponse)
 async def get_me(
     candidate: dict = Depends(get_current_candidate),
     db: AsyncSession = Depends(get_db_session)
@@ -22,7 +22,7 @@ async def get_me(
         
     return dict(row._mapping)
 
-@router.patch("/me", response_model=CandidateResponse)
+@router.patch("/candidates/me", response_model=CandidateResponse)
 async def update_me(
     update_data: CandidateUpdate,
     candidate: dict = Depends(get_current_candidate),

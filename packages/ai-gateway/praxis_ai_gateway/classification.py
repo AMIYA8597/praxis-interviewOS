@@ -47,6 +47,12 @@ def _heuristic_fallback(transcript: str) -> QuestionClassification:
     )
 
 class FastClassifier:
+    """
+    ### ORCHESTRATOR INTERFACE CONTRACT:
+    - **Invocation Phase**: Call `classify(transcript, prior_context)` during the `TURN_END` phase, immediately after the candidate finishes speaking.
+    - **Output Shape**: Returns a `QuestionClassification` Pydantic model (contains `is_question`, `question_type`, `domain`, `is_follow_up`, etc.).
+    - **Latency Guarantee**: Enforces a strict 120ms timeout. Will NOT block state transitions for more than 120ms. If the LLM exceeds this, it gracefully returns a deterministic heuristic fallback.
+    """
     def __init__(self, router: GatewayRouter, redis_pool=None):
         self.router = router
         self.redis_pool = redis_pool
@@ -54,6 +60,12 @@ class FastClassifier:
             self.prompt_template = f.read()
 
     async def classify(self, transcript: str, prior_context: str = "") -> QuestionClassification:
+        # Fast-path false-question filter
+        fallback = _heuristic_fallback(transcript)
+        if not fallback.is_question:
+            logger.debug("Fast-path heuristic matched false-question. Bypassing LLM.")
+            return fallback
+
         # Cache Key Strategy: hash of transcript + prior_context
         cache_key = None
         if self.redis_pool:

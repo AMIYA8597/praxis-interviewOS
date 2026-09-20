@@ -14,7 +14,9 @@ create table if not exists storage.buckets (
   owner uuid,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
-  public boolean default false
+  public boolean default false,
+  file_size_limit bigint,
+  allowed_mime_types text[]
 );
 
 create table if not exists storage.objects (
@@ -29,12 +31,13 @@ create table if not exists storage.objects (
 );
 
 -- Insert buckets
-insert into storage.buckets (id, name, public)
+insert into storage.buckets (id, name, public, file_size_limit)
 values 
-  ('resumes', 'resumes', false),
-  ('screenshots', 'screenshots', false),
-  ('exports', 'exports', false)
-on conflict (id) do nothing;
+  ('resumes', 'resumes', false, 5242880),
+  ('documents', 'documents', false, 5242880),
+  ('screenshots', 'screenshots', false, 5242880),
+  ('exports', 'exports', false, 5242880)
+on conflict (id) do update set file_size_limit = EXCLUDED.file_size_limit;
 
 -- ============
 -- STORAGE RLS POLICIES
@@ -84,3 +87,7 @@ using (
     select id from candidates where profile_id = auth.uid()
   )
 );
+
+GRANT USAGE ON SCHEMA storage TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA storage TO authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO authenticated;

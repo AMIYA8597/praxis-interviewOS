@@ -26,16 +26,22 @@ jest.mock('electron', () => ({
 
 // Mock audio to prevent issues with desktopCapturer
 jest.mock('../src/main/audio', () => ({
-  getAudioSources: jest.fn()
+  getAudioSources: jest.fn(),
+  setupAudioCapture: jest.fn()
+}));
+
+jest.mock('../src/main/capture', () => ({
+  setupScreenshotCapture: jest.fn(),
+  cleanupScreenshotCapture: jest.fn()
 }));
 
 jest.mock('electron-is-dev', () => true);
 
 describe('Main Process', () => {
-  it('registers IPC handler for storage:save', () => {
+  it('registers IPC handler for storage.set', () => {
     require('../src/main/index');
     expect(ipcMain.handle).toHaveBeenCalledWith(
-      'storage:save',
+      'storage.set',
       expect.any(Function)
     );
   });

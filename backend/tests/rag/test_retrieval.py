@@ -1,5 +1,5 @@
 import pytest
-from app.rag.retrieval import hybrid_search
+from praxis_ai_gateway.retrieval import hybrid_search
 
 def test_retrieval_invariant_excludes_unverified():
     """
@@ -15,5 +15,6 @@ def test_retrieval_invariant_excludes_unverified():
     
     # For now, we assert the hardcoded SQL constraint exists in the query logic.
     import inspect
-    source = inspect.getsource(hybrid_search)
-    assert "WHERE (sc.id IS NULL OR sc.supported = true)" in source, "CRITICAL: RRF query is missing the unverified claim filter."
+    import praxis_ai_gateway.retrieval as ret_module
+    source = inspect.getsource(ret_module)
+    assert "verified_by_user = false" in source and "NOT EXISTS" in source, "CRITICAL: RRF query is missing the unverified claim filter."

@@ -25,11 +25,10 @@ class SessionClaim(BaseModel):
     supported: bool = False
     source_chunk_id: Optional[str] = None
     source_project_id: Optional[str] = None
-    source_excerpt: Optional[str] = None
+    confidence: Optional[float] = None
     contradiction_of_claim_id: Optional[str] = None
 
-# Global mock DB for claims during test
-_CLAIM_DB: List[SessionClaim] = []
+
 
 async def extract_claims(answer_text: str, question_context: str, gateway_router, routing_ctx) -> List[str]:
     """
@@ -64,7 +63,11 @@ async def check_consistency(new_claim_text: str, session_id: str, gateway_router
     Task 3: The Consistency Engine.
     Checks if `new_claim` contradicts any previously stored claim for this session.
     """
-    session_claims = [c for c in _CLAIM_DB if c.session_id == session_id]
+    from sqlalchemy import text
+    query = text("SELECT id, claim_text FROM session_claims WHERE session_id = :sid")
+    res = await gateway_router.db.execute(query, {"sid": session_id})
+    session_claims = res.fetchall()
+    
     if not session_claims:
         return ConsistencyResult(is_contradiction=False)
         
@@ -99,20 +102,24 @@ async def check_consistency(new_claim_text: str, session_id: str, gateway_router
         logger.warning(f"Consistency check failed: {e}")
         return ConsistencyResult(is_contradiction=False)
 
-async def check_grounding(claim_text: str, candidate_id: str, gateway_router, routing_ctx, mock_retriever=None) -> SessionClaim:
+async def check_grounding(claim_text: str, candidate_id: str, gateway_router, routing_ctx) -> SessionClaim:
     """
     Task 2: Grounding check per claim.
     """
-    # 1. Hybrid retrieval (Mocked for testing since we are not connecting to Postgres pgvector directly here)
-    if mock_retriever:
-        retrieved_chunks = await mock_retriever.search(claim_text, candidate_id)
-    else:
-        retrieved_chunks = []
+    from praxis_ai_gateway.retrieval import hybrid_search
+    # gateway_router.db is an AsyncSession, we extract the bind engine
+    retrieved_chunks = await hybrid_search(
+        query=claim_text, 
+        candidate_id=candidate_id, 
+        db=gateway_router.db.bind, 
+        k=3,
+        boost_verified=True
+    )
         
     supported = False
     source_chunk_id = None
     source_project_id = None
-    source_excerpt = None
+    confidence = None
     
     # 2. Relevance/Entailment check (fast_classify)
     if retrieved_chunks:
@@ -120,7 +127,7 @@ async def check_grounding(claim_text: str, candidate_id: str, gateway_router, ro
         for chunk in retrieved_chunks:
             builder = PromptBuilder()
             builder.add_system("Does this retrieved context genuinely corroborate the specific claim? Reply YES or NO.")
-            builder.add_trusted_context("retrieved_context", chunk['content'])
+            builder.add_trusted_context("retrieved_context", chunk.content)
             builder.add_task(f"Claim: {claim_text}")
             
             try:
@@ -132,9 +139,9 @@ async def check_grounding(claim_text: str, candidate_id: str, gateway_router, ro
                 )
                 if "YES" in call_result.result.text.upper():
                     supported = True
-                    source_chunk_id = chunk['id']
-                    source_project_id = chunk.get('project_id')
-                    source_excerpt = chunk['content'][:200]
+                    source_chunk_id = chunk.id
+                    source_project_id = getattr(chunk, 'project_id', None)
+                    confidence = 1.0
                     break
             except Exception as e:
                 logger.warning(f"Entailment check failed: {e}")
@@ -145,35 +152,40 @@ async def check_grounding(claim_text: str, candidate_id: str, gateway_router, ro
         supported=supported,
         source_chunk_id=source_chunk_id,
         source_project_id=source_project_id,
-        source_excerpt=source_excerpt
+        confidence=confidence
     )
 
-def get_claim_provenance(claim_id: str) -> Optional[ClaimProvenance]:
+async def get_claim_provenance(claim_id: str, gateway_router) -> Optional[ClaimProvenance]:
     """
     Task 6: Provenance Data Assembly for the (Future) UI.
     """
-    claim = next((c for c in _CLAIM_DB if c.id == claim_id), None)
-    if not claim:
+    from sqlalchemy import text
+    query = text("SELECT claim_text, supported, source_chunk_id, source_project_id, confidence FROM session_claims WHERE id = :id")
+    res = await gateway_router.db.execute(query, {"id": claim_id})
+    row = res.fetchone()
+    
+    if not row:
         return None
         
     return ClaimProvenance(
-        claim_text=claim.claim_text,
-        supported=claim.supported,
-        source_chunk_id=claim.source_chunk_id,
-        source_project_id=claim.source_project_id,
-        source_excerpt=claim.source_excerpt
+        claim_text=row.claim_text,
+        supported=row.supported,
+        source_chunk_id=row.source_chunk_id,
+        source_project_id=row.source_project_id,
+        confidence=row.confidence
     )
 
-async def process_candidate_answer_claims(answer_text: str, question_context: str, session_id: str, candidate_id: str, gateway_router, routing_ctx, mock_retriever=None) -> List[SessionClaim]:
+async def process_candidate_answer_claims(answer_text: str, question_context: str, session_id: str, turn_id: str, candidate_id: str, gateway_router, routing_ctx) -> List[SessionClaim]:
     """
     End-to-end processing of claims for an answer.
     """
     claims = await extract_claims(answer_text, question_context, gateway_router, routing_ctx)
     processed_claims = []
     
+    from sqlalchemy import text
     for claim_text in claims:
         # 1. Grounding Check
-        session_claim = await check_grounding(claim_text, candidate_id, gateway_router, routing_ctx, mock_retriever)
+        session_claim = await check_grounding(claim_text, candidate_id, gateway_router, routing_ctx)
         session_claim.session_id = session_id
         
         # 2. Consistency Engine
@@ -181,7 +193,24 @@ async def process_candidate_answer_claims(answer_text: str, question_context: st
         if consistency.is_contradiction:
             session_claim.contradiction_of_claim_id = consistency.contradicted_claim_id
             
-        _CLAIM_DB.append(session_claim)
+        # 3. Save to DB
+        query = text("""
+            INSERT INTO session_claims (id, session_id, turn_id, claim_text, supported, source_chunk_id, source_project_id, confidence, contradiction_of_claim_id)
+            VALUES (:id, :session_id, :turn_id, :claim_text, :supported, :source_chunk_id, :source_project_id, :confidence, :contradiction_of_claim_id)
+        """)
+        await gateway_router.db.execute(query, {
+            "id": session_claim.id,
+            "session_id": session_claim.session_id,
+            "turn_id": turn_id,
+            "claim_text": session_claim.claim_text,
+            "supported": session_claim.supported,
+            "source_chunk_id": session_claim.source_chunk_id,
+            "source_project_id": session_claim.source_project_id,
+            "confidence": session_claim.confidence,
+            "contradiction_of_claim_id": session_claim.contradiction_of_claim_id
+        })
+        await gateway_router.db.commit()
+        
         processed_claims.append(session_claim)
         
     return processed_claims

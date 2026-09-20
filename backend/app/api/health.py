@@ -54,4 +54,18 @@ async def ready_check(
 @router.get("/health/providers", status_code=status.HTTP_200_OK)
 async def providers_check(gateway = Depends(get_ai_gateway)):
     """AI Providers readiness snapshot."""
-    return {"status": getattr(gateway, "status", "not yet configured")}
+    providers_status = {}
+    from praxis_ai_gateway.resilience import CircuitBreaker
+    
+    for name, provider in gateway.providers.items():
+        caps = provider.capabilities()
+        # Default capability check
+        cb = CircuitBreaker(gateway.redis, gateway.db, name, "generate")
+        state = await cb.get_state()
+        
+        providers_status[name] = {
+            "capabilities": caps.model_dump(),
+            "circuit_breaker_state": state
+        }
+        
+    return {"status": "ok", "providers": providers_status}

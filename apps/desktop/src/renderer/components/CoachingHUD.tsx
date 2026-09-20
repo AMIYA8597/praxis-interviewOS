@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useRealtimeSession } from '../hooks/useRealtimeSession';
+import { useAudioCapture } from '../hooks/useAudioCapture';
 import { MetricsDisplay, TranscriptDisplay, CoachingFeedback } from '@praxis/ui';
 import type { SessionMetrics, TranscriptSegment } from '@praxis/types';
 
@@ -10,7 +11,18 @@ interface CoachingHUDProps {
 
 export function CoachingHUD({ sessionId, isLive }: CoachingHUDProps) {
   const { connected, events, sendAudioFrame } = useRealtimeSession(sessionId);
+  const { isCapturing, error, diagnostic, startCapture, stopCapture } = useAudioCapture(sendAudioFrame);
   
+  // Start capture automatically when live and connected
+  useEffect(() => {
+    if (isLive && connected && !isCapturing) {
+      startCapture();
+    }
+    return () => {
+      if (isCapturing) stopCapture();
+    };
+  }, [isLive, connected, isCapturing, startCapture, stopCapture]);
+
   // State for each visual component
   const [metrics, setMetrics] = useState<SessionMetrics | null>(null);
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
@@ -36,8 +48,8 @@ export function CoachingHUD({ sessionId, isLive }: CoachingHUDProps) {
       });
     };
     
-    window.addEventListener('metrics-update', handleMetricsUpdate as EventListener);
-    return () => window.removeEventListener('metrics-update', handleMetricsUpdate as EventListener);
+    window.addEventListener('coaching.metrics', handleMetricsUpdate as EventListener);
+    return () => window.removeEventListener('coaching.metrics', handleMetricsUpdate as EventListener);
   }, []);
   
   // EVENT LISTENER 2: Transcript Updates (as they arrive from STT)
@@ -88,12 +100,12 @@ export function CoachingHUD({ sessionId, isLive }: CoachingHUDProps) {
   
   // EVENT LISTENER 4: Session State Changes
   useEffect(() => {
-    const handleStateChange = (event: CustomEvent<{ state: string }>) => {
-      setSessionState(event.detail.state);
+    const handleStateChange = (event: CustomEvent<{ to_state: string }>) => {
+      setSessionState(event.detail.to_state);
     };
     
-    window.addEventListener('session.state-changed', handleStateChange as EventListener);
-    return () => window.removeEventListener('session.state-changed', handleStateChange as EventListener);
+    window.addEventListener('state.transitioned', handleStateChange as EventListener);
+    return () => window.removeEventListener('state.transitioned', handleStateChange as EventListener);
   }, []);
   
   // TIMER: Update elapsed time every second
@@ -122,64 +134,80 @@ export function CoachingHUD({ sessionId, isLive }: CoachingHUDProps) {
   
   // RENDER: Four-column layout
   return (
-    <div className="flex gap-4 h-full bg-gray-900 p-4 rounded-lg border border-gray-700">
-      
-      {/* COLUMN 1: METRICS (Left) */}
-      <div className="flex-1 space-y-2">
-        <h3 className="text-sm font-semibold text-gray-300">Coaching Metrics</h3>
-        {metrics ? (
-          <MetricsDisplay metrics={metrics} />
-        ) : (
-          <div className="text-xs text-gray-500">Waiting for metrics...</div>
-        )}
-      </div>
-      
-      {/* COLUMN 2: TRANSCRIPT (Center-Left) */}
-      <div className="flex-1 space-y-2">
-        <h3 className="text-sm font-semibold text-gray-300">Live Transcript</h3>
-        <TranscriptDisplay segments={transcript} />
-      </div>
-      
-      {/* COLUMN 3: COACHING TIPS (Center-Right) */}
-      <div className="flex-1 space-y-2">
-        <h3 className="text-sm font-semibold text-gray-300">Real-Time Coaching</h3>
-        <div className="space-y-2 h-32 overflow-y-auto">
-          {coachingTips.length === 0 ? (
-            <div className="text-xs text-gray-500">Listening...</div>
-          ) : (
-            coachingTips.map((tip, i) => (
-              <CoachingFeedback key={i} message={tip} />
-            ))
-          )}
+    <div className="flex flex-col gap-4 h-full">
+      {diagnostic && (
+        <div className={`p-2 text-xs rounded ${diagnostic.fallbackToMic ? 'bg-yellow-900/50 text-yellow-200' : 'bg-green-900/50 text-green-200'}`}>
+          {diagnostic.message}
         </div>
-      </div>
-      
-      {/* COLUMN 4: SESSION STATE & TIMER (Right) */}
-      <div className="flex flex-col justify-between items-end">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-gray-100">
-            {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, '0')}
-          </div>
-          <div className="text-xs text-gray-400 uppercase tracking-wide">Elapsed</div>
+      )}
+      {error && (
+        <div className="p-2 text-xs rounded bg-red-900/50 text-red-200">
+          Capture Error: {error}
+        </div>
+      )}
+      <div className="flex gap-4 flex-1 bg-gray-900 p-4 rounded-lg border border-gray-700">
+        
+        {/* COLUMN 1: METRICS (Left) */}
+        <div className="flex-1 space-y-2">
+          <h3 className="text-sm font-semibold text-gray-300">Coaching Metrics</h3>
+          {metrics ? (
+            <MetricsDisplay metrics={metrics} />
+          ) : (
+            <div className="text-xs text-gray-500">Waiting for metrics...</div>
+          )}
         </div>
         
-        <div className="text-center">
-          <div className={`text-sm font-medium px-3 py-1 rounded ${
-            sessionState === 'READY' ? 'bg-green-900 text-green-100' :
-            sessionState === 'SCORING' ? 'bg-yellow-900 text-yellow-100' :
-            sessionState === 'INTERVIEWER_TURN' ? 'bg-blue-900 text-blue-100' :
-            'bg-gray-700 text-gray-100'
-          }`}>
-            {sessionState.replace(/_/g, ' ')}
+        {/* COLUMN 2: TRANSCRIPT (Center-Left) */}
+        <div className="flex-1 space-y-2">
+          <h3 className="text-sm font-semibold text-gray-300">Live Transcript</h3>
+          <TranscriptDisplay segments={transcript} />
+        </div>
+        
+        {/* COLUMN 3: COACHING TIPS (Center-Right) */}
+        <div className="flex-1 space-y-2">
+          <h3 className="text-sm font-semibold text-gray-300">Real-Time Coaching</h3>
+          <div className="space-y-2 h-32 overflow-y-auto">
+            {coachingTips.length === 0 ? (
+              <div className="text-xs text-gray-500">Listening...</div>
+            ) : (
+              coachingTips.map((tip, i) => (
+                <CoachingFeedback key={i} message={tip} />
+              ))
+            )}
           </div>
-          {connected ? (
-            <div className="text-xs text-green-400 mt-1">● Connected</div>
-          ) : (
-            <div className="text-xs text-red-400 mt-1">● Disconnected</div>
-          )}
+        </div>
+        
+        {/* COLUMN 4: SESSION STATE & TIMER (Right) */}
+        <div className="flex flex-col justify-between items-end">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-gray-100">
+              {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, '0')}
+            </div>
+            <div className="text-xs text-gray-400 uppercase tracking-wide">Elapsed</div>
+          </div>
+          
+          <div className="text-center">
+            <div className={`text-sm font-medium px-3 py-1 rounded ${
+              sessionState === 'READY' ? 'bg-green-900 text-green-100' :
+              sessionState === 'SCORING' ? 'bg-yellow-900 text-yellow-100' :
+              sessionState === 'INTERVIEWER_TURN' ? 'bg-blue-900 text-blue-100' :
+              'bg-gray-700 text-gray-100'
+            }`}>
+              {sessionState.replace(/_/g, ' ')}
+            </div>
+            {connected ? (
+              <div className="text-xs text-green-400 mt-1">-? Connected</div>
+            ) : (
+              <div className="text-xs text-red-400 mt-1">-? Disconnected</div>
+            )}
+            {isCapturing ? (
+              <div className="text-xs text-green-400 mt-1">-? Mic Active</div>
+            ) : (
+              <div className="text-xs text-gray-500 mt-1">-? Mic Inactive</div>
+            )}
+          </div>
         </div>
       </div>
-      
     </div>
   );
 }

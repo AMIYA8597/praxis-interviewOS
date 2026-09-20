@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Text, Boolean, Integer, Numeric, DateTime, ForeignKey, JSON, func, ARRAY
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
@@ -131,12 +131,13 @@ class Experience(Base):
     role = Column(String(255))
     start_date = Column(DateTime)
     end_date = Column(DateTime, nullable=True)
-
-class InterviewSession(Base):
-    __tablename__ = "interview_sessions"
+class PracticeSession(Base):
+    __tablename__ = "practice_sessions"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     candidate_id = Column(UUID(as_uuid=True), ForeignKey("candidate_profiles.id", ondelete="CASCADE"))
     job_id = Column(UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(50))
+    focus_area = Column(String(100))
     mode = Column(String(50))
     interview_type = Column(String(50))
     difficulty = Column(String(50))
@@ -150,13 +151,12 @@ class InterviewSession(Base):
     llm_provider = Column(String(50))
     tts_provider = Column(String(50))
     fallback_count = Column(Integer, default=0)
-    status = Column(String(50))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class SessionTurn(Base):
     __tablename__ = "session_turns"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("interview_sessions.id", ondelete="CASCADE"))
+    session_id = Column(UUID(as_uuid=True), ForeignKey("practice_sessions.id", ondelete="CASCADE"))
     turn_index = Column(Integer)
     speaker = Column(String(50)) # interviewer|candidate
     parent_turn_id = Column(UUID(as_uuid=True), ForeignKey("session_turns.id", ondelete="SET NULL"), nullable=True)
@@ -205,7 +205,7 @@ class TurnScore(Base):
 class SessionClaim(Base):
     __tablename__ = "session_claims"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("interview_sessions.id", ondelete="CASCADE"))
+    session_id = Column(UUID(as_uuid=True), ForeignKey("practice_sessions.id", ondelete="CASCADE"))
     turn_id = Column(UUID(as_uuid=True), ForeignKey("session_turns.id", ondelete="CASCADE"))
     claim_text = Column(Text)
     supported = Column(Boolean)
@@ -257,7 +257,7 @@ class UsageEvent(Base):
     __tablename__ = "usage_events"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(String(255), nullable=False) # Auth user
-    session_id = Column(UUID(as_uuid=True), ForeignKey("interview_sessions.id", ondelete="SET NULL"), nullable=True)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("practice_sessions.id", ondelete="SET NULL"), nullable=True)
     provider = Column(String(100))
     model = Column(String(100))
     capability = Column(String(100))
@@ -271,3 +271,15 @@ class UsageEvent(Base):
     latency_ms = Column(Integer)
     fell_back_from = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+class SessionDebrief(Base):
+    __tablename__ = "session_debriefs"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("practice_sessions.id", ondelete="CASCADE"), nullable=False, unique=True)
+    headline_metrics = Column(JSON)
+    strengths = Column(ARRAY(String).with_variant(JSON, "sqlite"))
+    weaknesses = Column(ARRAY(String).with_variant(JSON, "sqlite"))
+    flagged_claims = Column(JSON)
+    jd_coverage = Column(JSON)
+    generated_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now())

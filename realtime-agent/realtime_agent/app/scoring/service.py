@@ -49,7 +49,7 @@ async def verify_claim(claim: str, context: str, gateway_router, routing_ctx) ->
             "generate",
             messages=[m.model_dump(exclude_none=True) for m in builder.build()]
         )
-        return "YES" in call_result.text.upper()
+        return "YES" in call_result.result.text.upper()
     except Exception as e:
         logger.warning(f"Claim verification failed: {e}")
         return False

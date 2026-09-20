@@ -1,5 +1,5 @@
 import pytest
-from app.services.sm2 import calculate_sm2
+from backend.app.services.sm2 import calculate_sm2
 
 def test_sm2_perfect_recall():
     """

@@ -37,7 +37,7 @@ def main():
             # Optionally skip tests if needed, but let's just check all non-excluded .py files
             # test files usually don't import provider SDKs directly either, they import the adapter or mock it via respx.
             
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
                 for i, line in enumerate(lines, 1):
                     if forbidden_pattern.search(line):

@@ -35,6 +35,19 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
 
+  worker:
+    build: 
+      context: ./backend
+    command: python -m arq backend.worker_settings.WorkerSettings
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://praxis:dev_password@postgres:5432/praxis
+      REDIS_URL: redis://redis:6379/0
+
 volumes:
   praxis_pgdata:
   praxis_redisdata:

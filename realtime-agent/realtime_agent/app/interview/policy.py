@@ -55,7 +55,7 @@ class SessionMemory:
                 "fast_classify",
                 routing_ctx,
                 "generate",
-                messages=[m.model_dump(exclude_none=True) for m in builder.build()]
+                messages=builder.build()
             )
             self.compressed_summary = call_result.result.text
         except Exception as e:
@@ -179,8 +179,8 @@ class InterviewSession:
             call_result = await gateway_router.route(
                 "deep_reasoning",
                 routing_ctx,
-                "generate_structured",
-                messages=[m.model_dump(exclude_none=True) for m in builder.build()],
+                "structured",
+                messages=builder.build(),
                 schema=PolicyDecision
             )
             decision = call_result.result

@@ -11,24 +11,43 @@ Object.defineProperty(global.navigator, 'mediaDevices', {
   writable: true
 });
 
-const mockCreateScriptProcessor = jest.fn().mockReturnValue({
-  connect: jest.fn(),
-  disconnect: jest.fn()
-});
-
 const mockCreateMediaStreamSource = jest.fn().mockReturnValue({
   connect: jest.fn()
 });
 
+class MockAudioWorkletNode {
+  port = { onmessage: null };
+  connect = jest.fn();
+  disconnect = jest.fn();
+}
+
+Object.defineProperty(window, 'AudioWorkletNode', {
+  value: MockAudioWorkletNode,
+  writable: true
+});
+
+Object.defineProperty(window, 'URL', {
+  value: {
+    createObjectURL: jest.fn().mockReturnValue('blob:mock-url')
+  }
+});
+
 Object.defineProperty(window, 'AudioContext', {
   value: jest.fn().mockImplementation(() => ({
-    createScriptProcessor: mockCreateScriptProcessor,
     createMediaStreamSource: mockCreateMediaStreamSource,
+    audioWorklet: {
+      addModule: jest.fn().mockResolvedValue(undefined)
+    },
     destination: {},
     close: jest.fn()
   })),
   writable: true
 });
+
+(window as any).electronAPI = {
+  audioGetSources: jest.fn().mockResolvedValue({ hasLoopback: true, sources: [] }),
+  systemGetStatus: jest.fn().mockResolvedValue({ os: 'win32' })
+};
 
 describe('useAudioCapture', () => {
   it('starts audio capture and sets isCapturing=true', async () => {

@@ -28,6 +28,13 @@ class PiperTTSAdapter:
     """
     Local Piper TTS via ONNX.
     Supports streaming synthesis chunked by sentence and a hard cancel() hook for barge-in.
+    
+    ### ORCHESTRATOR INTERFACE CONTRACT:
+    - **Method**: `synthesize_streaming(text_stream: AsyncIterator[str], cancellation_token: CancellationToken) -> AsyncIterator[bytes]`
+    - **Input Shape**: An async iterator yielding incremental text/token deltas (strings) as they arrive from the LLM. 
+      It does NOT require a single pre-assembled string.
+    - **Output Shape**: An async iterator yielding raw 16kHz PCM audio bytes (`bytes`).
+    - **Cancellation**: Must be passed a `CancellationToken` (from `praxis_ai_gateway.cancellation`). If `token.is_cancelled()` becomes true (e.g. from a barge-in event), synthesis instantly aborts and stops yielding audio chunks.
     """
     def __init__(self, voice_model="models/en_US-lessac-low.onnx"):
         self.voice_model = voice_model

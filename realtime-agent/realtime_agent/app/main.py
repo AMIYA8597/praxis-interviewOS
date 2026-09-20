@@ -33,13 +33,34 @@ async def lifespan(app: FastAPI):
     trace.set_tracer_provider(provider)
     
     # Setup DB
-    engine = create_async_engine(DATABASE_URL, pool_size=20, max_overflow=10)
+    db_url = os.environ.get("DATABASE_URL", DATABASE_URL)
+    engine = create_async_engine(db_url, pool_size=20, max_overflow=10)
     app.state.db_session_factory = async_sessionmaker(engine, expire_on_commit=False)
     
     # Setup Redis
-    app.state.redis_pool = Redis.from_url(REDIS_URL)
+    redis_url = os.environ.get("REDIS_URL", REDIS_URL)
+    app.state.redis_pool = Redis.from_url(redis_url)
     
-    logger.info({"event": "realtime_agent_ready", "db": "connected", "redis": "connected"})
+    from praxis_ai_gateway.registry import ModelRegistry
+    from praxis_ai_gateway.providers.openai import OpenAIProvider
+    from praxis_ai_gateway.providers.ollama import OllamaProvider
+    from praxis_ai_gateway.router import GatewayRouter
+    
+    registry = ModelRegistry("config/models.yaml")
+    
+    providers = {}
+    if os.environ.get("OPENAI_API_KEY"):
+        providers["openai"] = OpenAIProvider()
+    providers["ollama"] = OllamaProvider()
+    
+    app.state.gateway_router = GatewayRouter(
+        registry=registry,
+        providers=providers,
+        redis=app.state.redis_pool,
+        db=None  # Can be overridden per request
+    )
+    
+    logger.info({"event": "realtime_agent_ready", "db": "connected", "redis": "connected", "gateway": "initialized"})
     
     yield
     
@@ -84,18 +105,35 @@ def create_app() -> FastAPI:
             user_payload = await verify_jwt(token, websocket.app.state.redis_pool)
             user_id = user_payload.get("sub")
             
-            # 2. Verify Session ownership
+            # 2. Verify Session ownership and fetch initial data
             async with websocket.app.state.db_session_factory() as db:
                 query = text("""
-                    SELECT s.id 
+                    SELECT s.id, b.summary as blueprint, c.id as candidate_id, c.full_name as candidate_name
                     FROM practice_sessions s
                     JOIN candidates c ON s.candidate_id = c.id
+                    LEFT JOIN job_blueprints b ON s.job_id = b.job_id
                     WHERE s.id = :sid AND c.profile_id = :uid
                 """)
                 res = await db.execute(query, {"sid": session_id, "uid": user_id})
-                if not res.scalar():
+                row = res.fetchone()
+                if not row:
                     await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Session not found or forbidden")
                     return
+                
+                # Fetch prep_pack questions from DB or generate if not exists.
+                # Actually, prep_pack should already be populated by worker_tasks before session starts.
+                # Let's get them from interview_prep_packs or similar if they exist. Wait, the DB model for practice_sessions doesn't have a prep_pack column, but we can query session_turns for the initial questions if they are stored there, or just generate them.
+                # We'll just create the InterviewSession with the data.
+                import json
+                raw_bp = row.blueprint
+                if isinstance(raw_bp, str):
+                    try:
+                        jd_blueprint = json.loads(raw_bp)
+                    except:
+                        jd_blueprint = {}
+                else:
+                    jd_blueprint = raw_bp or {}
+                candidate_profile = {"id": str(row.candidate_id), "name": row.candidate_name or "Candidate"}
         except ValueError as e:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason=str(e))
             return
@@ -115,7 +153,11 @@ def create_app() -> FastAPI:
         
         # Initialize STT
         from praxis_ai_gateway.transcription.router import select_transcriber
-        transcriber = select_transcriber({}, {})
+        import os
+        settings = {
+            "LOCAL_ONLY_MODE": os.environ.get("LOCAL_ONLY_MODE", "true").lower()
+        }
+        transcriber = select_transcriber({}, settings, enqueue_event)
         await transcriber.connect({"language": None})
         
         # Setup DB session for logging
@@ -170,10 +212,33 @@ def create_app() -> FastAPI:
             enqueue_event_cb=enqueue_event
         )
         
+        from realtime_agent.app.interview.policy import InterviewSession
+        from realtime_agent.app.session.orchestrator import SessionOrchestrator
+        from realtime_agent.app.audio.tts import PiperTTSAdapter
+        from praxis_ai_gateway.router import RoutingContext
+        
+        interview_session = InterviewSession(jd_blueprint=jd_blueprint, candidate_profile=candidate_profile)
+        tts_adapter = PiperTTSAdapter()
+        routing_ctx = RoutingContext(user_id=user_id)
+        
+        orchestrator = SessionOrchestrator(
+            session=interview_session,
+            generation_manager=generation_manager,
+            session_manager=sm,
+            gateway=websocket.app.state.gateway_router,
+            routing_ctx=routing_ctx,
+            tts=tts_adapter,
+            enqueue_event=enqueue_event
+        )
+
+        
         # STT Background Event Receiver
         async def receive_stt_events():
             async for ev in transcriber.receive_events():
                 evt_type = "transcript.partial" if ev["is_interim"] else "transcript.final"
+                # Update transcript
+                state_vars["current_transcript"] = ev.get("text", "")
+                
                 envelope = Envelope(
                     type=evt_type,
                     session_id=session_id,
@@ -181,6 +246,9 @@ def create_app() -> FastAPI:
                     payload=ev
                 )
                 enqueue_event(envelope)
+                
+                if sm.sm.state == SessionState.AWAITING_ANSWER:
+                    await sm.transition(SessionState.CANDIDATE_TURN)
                 
                 # Write to transcript_segments on final
                 if not ev["is_interim"]:
@@ -226,10 +294,15 @@ def create_app() -> FastAPI:
                 # Then READY
                 await sm.transition(SessionState.READY)
                 
+                # Start the interview for fresh session
+                asyncio.create_task(orchestrator.begin_interviewer_turn())
+                
             import time
             tracer = trace.get_tracer(__name__)
             
             vad_speech_start_ts = None
+            vad_speech_end_ts = None
+            state_vars = {"current_transcript": "", "turn_completed": False}
             
             while True:
                 message = await websocket.receive()
@@ -268,18 +341,35 @@ def create_app() -> FastAPI:
                             # Task 5: Barge-in trigger
                             if evt == "speech_start":
                                 vad_speech_start_ts = time.perf_counter()
-                                if sm.sm.state == SessionState.INTERVIEWER_TURN:
+                                vad_speech_end_ts = None
+                                if sm.sm.state == SessionState.AWAITING_ANSWER:
+                                    await sm.transition(SessionState.CANDIDATE_TURN)
+                                elif sm.sm.state == SessionState.INTERVIEWER_TURN:
                                     logger.info("VAD detected speech during INTERVIEWER_TURN, triggering barge-in")
                                     await barge_in_controller.trigger(reason="vad_speech_detected")
                             
                             elif evt == "speech_end":
+                                vad_speech_end_ts = time.perf_counter()
                                 await transcriber.signal_segment_end()
+                                
+                    # If we are in AWAITING_ANSWER or CANDIDATE_TURN and speech has ended, track silence
+                    if sm.sm.state in (SessionState.AWAITING_ANSWER, SessionState.CANDIDATE_TURN) and vad_speech_end_ts:
+                        silence_ms = (time.perf_counter() - vad_speech_end_ts) * 1000
+                        
+                        # Call handle_vad_silence (it checks if it should call on_candidate_turn_end)
+                        await orchestrator.handle_vad_silence(silence_ms, state_vars["current_transcript"])
+                        
+                        # If transition occurred, reset tracking
+                        if sm.sm.state not in (SessionState.AWAITING_ANSWER, SessionState.CANDIDATE_TURN):
+                            vad_speech_end_ts = None
+                            state_vars["current_transcript"] = ""
                                 
                 elif "text" in message:
                     try:
                         import json
                         evt_data = json.loads(message["text"])
                         evt_type = evt_data.get("type")
+                        logger.info(f"Received text event: {evt_type}")
                         
                         if evt_type == "audio.playback_stopped":
                             # Task 3: Client confirmation
@@ -298,6 +388,10 @@ def create_app() -> FastAPI:
                                 latency = (conf_ts - vad_speech_start_ts) * 1000
                                 logger.info(f"--- BARGE-IN LATENCY CHAIN COMPLETED ---")
                                 logger.info(f"End-to-End Latency: {latency:.2f} ms")
+                        
+                        elif evt_type == "session.end":
+                            logger.info("Client explicitly requested session end")
+                            await orchestrator.end_session_and_debrief()
                                 
                     except Exception as e:
                         logger.error(f"Failed to process text message: {e}")
@@ -349,7 +443,7 @@ def create_app() -> FastAPI:
             else:
                 # Cleanly ended
                 try:
-                    query = text("UPDATE practice_sessions SET status = 'completed', ended_at = NOW() WHERE id = :sid")
+                    query = text("UPDATE practice_sessions SET status = 'completed', ended_at = CURRENT_TIMESTAMP WHERE id = :sid")
                     await db.execute(query, {"sid": session_id})
                     await db.commit()
                 except Exception as e:

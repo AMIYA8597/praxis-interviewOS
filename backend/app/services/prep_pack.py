@@ -1,12 +1,12 @@
 import logging
 from typing import List, Dict
 
-from packages.ai_gateway.router import GatewayRouter, RoutingContext
+from praxis_ai_gateway.router import GatewayRouter, RoutingContext
+from praxis_ai_gateway.base import LLMMessage
 
 logger = logging.getLogger(__name__)
-gateway = GatewayRouter()
 
-async def generate_prep_pack(match_results: Dict, blueprint: Dict) -> List[str]:
+async def generate_prep_pack(match_results: Dict, blueprint: Dict, gateway: GatewayRouter) -> List[str]:
     """
     Pre-computes the top 15 likely interview questions based on the JD Blueprint
     and aggressively weighted toward the candidate's 'missing' gaps.
@@ -25,20 +25,27 @@ async def generate_prep_pack(match_results: Dict, blueprint: Dict) -> List[str]:
     Candidate Gaps (MUST PROBE THESE DEEPLY): {missing_gaps}
     
     Do not generate generic filler like 'What is your greatest weakness?'.
+    Output ONLY a list of questions separated by newlines.
     """
     
-    provider = gateway.route("reasoning", RoutingContext())
+    route_ctx = RoutingContext(user_id="system")
     
-    # result = await provider.generate([{"role": "user", "content": prompt}])
-    # questions = parse_result(result.text)
-    
-    # Stub
-    questions = [
-        f"I see you don't have much listed for {gap}. How would you approach a problem requiring it?"
-        for gap in missing_gaps
+    messages = [
+        LLMMessage(role="user", content=prompt)
     ]
     
-    while len(questions) < 15:
-        questions.append("Can you describe a challenging architecture decision you made?")
+    try:
+        result = await gateway.route("deep_reasoning", route_ctx, "generate", messages=messages)
+        text = result.result.text
         
-    return questions[:15]
+        # Parse into a list
+        questions = [q.strip().lstrip('0123456789.- ') for q in text.split('\n') if q.strip()]
+        
+        if not questions:
+            raise ValueError("No questions generated")
+            
+        return questions[:15]
+    except Exception as e:
+        logger.error(f"Failed to generate prep pack: {e}")
+        # Fallback without fabricating AI output
+        return ["Could not generate interview prep questions at this time. Please try again later."]

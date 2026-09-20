@@ -24,9 +24,6 @@ aliases:
       cost_per_1k_input: 0.00300
       cost_per_1k_output: 0.01500
 
-  unverified_task:
-    - provider: test
-      model: "<VERIFY_AT_BUILD>"
-
   stt_stream:
-    - provider: " local\n
+    - provider: "local"
+      model: "faster-whisper-small.en"

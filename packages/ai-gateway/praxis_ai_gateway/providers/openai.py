@@ -52,7 +52,7 @@ class OpenAIProvider(LLMProvider):
         raise exc
 
     async def generate(self, messages, cancellation_token=None, **kw):
-        return await with_cancellation(self._generate(messages, cancellation_token=None, **kw), cancellation_token)
+        return await with_cancellation(self._generate(messages, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _generate(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> LLMResponse:
         start = time.perf_counter()
@@ -100,7 +100,7 @@ class OpenAIProvider(LLMProvider):
             self._handle_error(e)
 
     async def structured(self, messages, schema, cancellation_token=None, **kw):
-        return await with_cancellation(self._structured(messages, schema, cancellation_token=None, **kw), cancellation_token)
+        return await with_cancellation(self._structured(messages, schema, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _structured(self, messages: list[LLMMessage], schema: type[BaseModel], cancellation_token: Any = None, **kw) -> BaseModel:
         payload = {
@@ -117,7 +117,7 @@ class OpenAIProvider(LLMProvider):
             self._handle_error(e)
 
     async def embed(self, texts, cancellation_token=None, **kw):
-        return await with_cancellation(self._embed(texts, cancellation_token=None, **kw), cancellation_token)
+        return await with_cancellation(self._embed(texts, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _embed(self, texts: list[str], cancellation_token: Any = None, **kw) -> list[list[float]]:
         payload = {

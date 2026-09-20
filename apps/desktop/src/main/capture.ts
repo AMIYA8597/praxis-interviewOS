@@ -1,6 +1,6 @@
-import { globalShortcut, desktopCapturer, ipcMain } from 'electron';
+import { globalShortcut, desktopCapturer, BrowserWindow } from 'electron';
 
-export function setupScreenshotCapture() {
+export function setupScreenshotCapture(mainWindow: BrowserWindow) {
   // Explicit, user-triggered single-shot capture. No continuous background recording.
   const registered = globalShortcut.register('CommandOrControl+Shift+S', async () => {
     try {
@@ -8,13 +8,14 @@ export function setupScreenshotCapture() {
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
       
       if (sources.length > 0) {
-        // Grab the primary screen thumbnail as a NativeImage
-        const imageBuffer = sources[0].thumbnail.toPNG();
+        // Grab the primary screen thumbnail as a NativeImage data URL
+        const dataUrl = sources[0].thumbnail.toDataURL();
         
         // Push buffer to the frontend to trigger the Study Workbench
-        // In a real app, we'd send this over IPC to the active BrowserWindow
-        // mainWindow.webContents.send('capture-ready', imageBuffer);
-        console.log(`Captured ${imageBuffer.length} bytes.`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('screenshot.captureReady', dataUrl);
+          console.log(`Captured image and sent to renderer.`);
+        }
       }
     } catch (e) {
       console.error("Capture failed:", e);

@@ -33,8 +33,15 @@ class PromptBuilder:
     def add_untrusted(self, label: str, source: str, content: str) -> "PromptBuilder":
         # Untrusted content sanitization:
         # Strip or escape any sequences that resemble our builder's own section-delimiter syntax.
-        # Specifically, we want to prevent closing tags like </UNTRUSTED_DOCUMENT> or opening tags.
         safe_content = content
+        
+        # Extended delimiter-injection defense: escape any < or > if it appears near the word TRUSTED, UNTRUSTED, SYSTEM, or INSTRUCTION
+        safe_content = re.sub(
+            r'([<>].{0,10}(?:TRUSTED|UNTRUSTED|SYSTEM|INSTRUCTION))|((?:TRUSTED|UNTRUSTED|SYSTEM|INSTRUCTION).{0,10}[<>])', 
+            lambda m: m.group(0).replace('<', '&lt;').replace('>', '&gt;'), 
+            safe_content, 
+            flags=re.IGNORECASE
+        )
         
         # Strip exact closing tag match (case insensitive) with optional spacing
         safe_content = re.sub(r'</UNTRUSTED_DOCUMENT\s*>', '&lt;/UNTRUSTED_DOCUMENT&gt;', safe_content, flags=re.IGNORECASE)

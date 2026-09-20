@@ -16,8 +16,5 @@ dependencies = [
     "SQLAlchemy"
 ]
 
-[tool.setuptools]
-py-modules = ["base", "budget", "resilience", "router"]
-
 [tool.setuptools.packages.find]
-include = ["providers*"]
+include = ["praxis_ai_gateway*"]

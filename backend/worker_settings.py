@@ -27,18 +27,7 @@ async def ping_job(ctx, message: str) -> str:
         await asyncio.sleep(0.1) # Simulate minimal work
         return f"pong: {message}"
 
-# Phase 1.12: Deletion Worker Contract
-async def delete_candidate_account_job(ctx, deletion_job_id: str, candidate_id: str):
-    """
-    Contract:
-    1. Delete storage objects (resumes, screenshots, exports) under `<candidate_id>/`
-    2. Delete database rows (via candidate cascade)
-    3. Verify zero rows remain
-    4. Update deletion_jobs.status = 'completed' with rows_deleted_summary
-       or 'failed' with error_message.
-    (Actual implementation belongs to Stage 2)
-    """
-    pass
+# (Deleted inline delete_candidate_account_job to use the one from worker_tasks instead)
 
 # Phase 1.13: Supabase Keepalive (Belt and Suspenders)
 async def supabase_keepalive_job(ctx):
@@ -60,16 +49,7 @@ async def supabase_keepalive_job(ctx):
     except Exception as e:
         print(f"Keepalive failed: {e}")
 
-# Phase 1.12: Retention Enforcement Job
-async def enforce_retention_policies_job(ctx):
-    """
-    Runs daily.
-    Contract:
-    1. Delete transcript_segments older than user_settings.data_retention_days
-    2. Delete saved screenshots older than user_settings.data_retention_days
-    3. Log actions to privacy_events.
-    """
-    pass
+
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
@@ -104,14 +84,20 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(REDIS_URL)
     
     # Stage 2/3 will append real job functions here
+
     from praxis_ai_gateway.tasks import check_provider_health
-    from backend.app.worker_tasks import process_resume, analyze_job, cleanup_old_sessions, purge_expired_retention_data
+    from backend.app.workers.document_worker import process_document
+    from backend.app.workers.embedding_worker import generate_embeddings
+    from backend.app.worker_tasks import analyze_job, cleanup_old_sessions, purge_expired_retention_data, delete_candidate_account_job, process_resume
+
     
     functions = [
         # ping_job, # SMOKE TEST - Retained but not part of production registry
         delete_candidate_account_job,
         supabase_keepalive_job,
         check_provider_health,
+        process_document,
+        generate_embeddings,
         process_resume,
         analyze_job,
         cleanup_old_sessions,
@@ -120,7 +106,7 @@ class WorkerSettings:
     
     # Register scheduled background jobs
     cron_jobs = [
-        # arq.cron(supabase_keepalive_job, hour=12, minute=0) # Runs daily at Noon
+        arq.cron(supabase_keepalive_job, hour=12, minute=0), # Runs daily at Noon
         arq.cron(check_provider_health, second={0}), # Every 60s
         arq.cron(cleanup_old_sessions, minute={0, 15, 30, 45}), # Every 15 mins
         arq.cron(purge_expired_retention_data, hour=3, minute=0) # Daily at 3 AM
@@ -135,15 +121,28 @@ class WorkerSettings:
     max_tries = 3
     
     # Failure Visibility Convention Hook
-    # Stage 2/3 will implement the actual logic to write to the `failed_jobs` table.
     @staticmethod
     async def on_job_end(ctx, job_id, job_name, args, kwargs, result, was_cancelled, exception):
-        # A job is permanently failed if it threw an exception on its final retry attempt
         if exception:
             job_try = ctx.get('job_try', 1)
-            # WorkerSettings.max_tries cannot be referenced directly cleanly here, 
-            # so we assume 3 or read from ctx if arq provides it.
             if job_try >= 3:
-                # TODO: Stage 2/3 - Write to Postgres `failed_jobs` table using service_role or pg pool
-                # e.g., INSERT INTO failed_jobs (job_name, job_id, args, error_message) ...
+                try:
+                    db = ctx.get('db_engine')
+                    if db:
+                        from sqlalchemy import text
+                        import json
+                        
+                        candidate_id = kwargs.get('candidate_id')
+                        if not candidate_id and len(args) > 1 and isinstance(args[1], str) and len(args[1]) > 20: # heuristic
+                            pass # We might parse args if needed, but kwargs is safer if named
+                            
+                        # Dump args properly
+                        args_json = json.dumps({"args": args, "kwargs": kwargs}, default=str)
+                        
+                        async with db.begin() as conn:
+                            await conn.execute(text(
+                                "INSERT INTO failed_jobs (job_name, job_id, args, error_message, candidate_id) VALUES (:name, :jid, :args, :err, :cid)"
+                            ), {"name": job_name, "jid": job_id, "args": args_json, "err": str(exception), "cid": candidate_id})
+                except Exception as e:
+                    print(f"Failed to record dead letter job: {e}")
                 print(f"[DEAD LETTER] Job {job_name} ({job_id}) failed permanently after {job_try} tries: {exception}")

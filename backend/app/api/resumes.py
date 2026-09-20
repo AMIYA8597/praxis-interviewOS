@@ -12,7 +12,7 @@ router = APIRouter(tags=['resumes'])
 
 ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
 
-@router.post("", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/resumes", status_code=status.HTTP_202_ACCEPTED)
 async def upload_resume(
     request: Request,
     file: UploadFile = File(...),
@@ -35,7 +35,7 @@ async def upload_resume(
     
     # 1. Insert documents row
     doc_query = text("INSERT INTO documents (id, profile_id, filename, content_type, size_bytes, processing_status) VALUES (:id, :profile_id, :filename, :content_type, :size, 'uploading') RETURNING id")
-    await db.execute(doc_query, {"id": document_id, "profile_id": candidate["user_id"], "filename": file.filename, "content_type": file.content_type, "size": 0})
+    await db.execute(doc_query, {"id": document_id, "profile_id": candidate.get("user_id", "")[:36], "filename": file.filename, "content_type": file.content_type, "size": 0})
     
     # 2. Insert resumes row
     res_query = text("INSERT INTO resumes (id, candidate_id, document_id, is_active) VALUES (:id, :candidate_id, :document_id, true) RETURNING id")
@@ -52,7 +52,7 @@ async def upload_resume(
     
     return {"id": resume_id, "status": "uploading", "message": "Resume accepted for processing"}
 
-@router.get("/{id}", response_model=dict)
+@router.get("/resumes/{id}", response_model=dict)
 async def get_resume_status(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
@@ -74,7 +74,7 @@ async def get_resume_status(
         
     return {"id": row[0], "processing_status": row[1]}
 
-@router.get("/{id}/facts", response_model=List[ResumeFactResponse])
+@router.get("/resumes/{id}/facts", response_model=List[ResumeFactResponse])
 async def get_resume_facts(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
@@ -92,7 +92,7 @@ async def get_resume_facts(
     result = await db.execute(query, {"id": str(id)})
     return [dict(r._mapping) for r in result.fetchall()]
 
-@router.post("/{id}/facts/{fact_id}/confirm", response_model=ResumeFactResponse)
+@router.post("/resumes/{id}/facts/{fact_id}/confirm", response_model=ResumeFactResponse)
 async def confirm_resume_fact(
     id: uuid.UUID,
     fact_id: uuid.UUID,
@@ -118,7 +118,7 @@ async def confirm_resume_fact(
         
     return dict(row._mapping)
 
-@router.post("/{id}/facts/{fact_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/resumes/{id}/facts/{fact_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
 async def reject_resume_fact(
     id: uuid.UUID,
     fact_id: uuid.UUID,
@@ -141,7 +141,7 @@ async def reject_resume_fact(
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
 
-@router.patch("/{id}/facts/{fact_id}", response_model=ResumeFactResponse)
+@router.patch("/resumes/{id}/facts/{fact_id}", response_model=ResumeFactResponse)
 async def update_resume_fact(
     id: uuid.UUID,
     fact_id: uuid.UUID,

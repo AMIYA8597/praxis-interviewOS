@@ -8,7 +8,7 @@ export function useScreenshotUpload() {
     setUploading(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/study-workbench/screenshots`,
+        `${(typeof process !== 'undefined' ? process.env.VITE_API_URL : '') || 'http://localhost:8000'}/api/v1/study/screenshots/solve`,
         {
           method: 'POST',
           headers: {
@@ -16,14 +16,14 @@ export function useScreenshotUpload() {
             'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
           },
           body: JSON.stringify({
-            image_base64: screenshotBase64,
-            context: 'study'  // or 'session'
+            extracted_text: screenshotBase64, // Sending base64 as extracted text for now to match schema
+            screenshot_task_id: "manual-capture-" + Date.now()
           })
         }
       );
       
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message);
+      if (!response.ok) throw new Error(data.message || 'Error from server');
       
       setResult(data);
     } catch (err) {

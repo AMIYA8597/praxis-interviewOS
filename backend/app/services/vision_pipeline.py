@@ -17,7 +17,9 @@ async def analyze_screenshot(image_bytes: bytes, gateway_router, routing_ctx) ->
     problem_statement = ""
     
     # 2. Heuristic fast-pass to avoid VLM cost
-    if "def " in ocr_text or "class " in ocr_text:
+    if not ocr_text:
+        pass
+    elif "def " in ocr_text or "class " in ocr_text:
         classification = "coding"
         problem_statement = ocr_text
     elif "SELECT " in ocr_text.upper() and "FROM " in ocr_text.upper():

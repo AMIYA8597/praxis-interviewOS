@@ -36,6 +36,18 @@ class GatewayRouter:
         self.budget_guard = BudgetGuard(redis, db)
 
     async def route(self, task: str, context: RoutingContext, method_name: str, *args, cancellation_token: Any = None, **kw) -> RoutedCall:
+        if method_name == "generate_structured":
+            method_name = "structured"
+        elif method_name == "generate_stream":
+            method_name = "stream"
+            
+        if "messages" in kw:
+            from praxis_ai_gateway.base import LLMMessage
+            kw["messages"] = [
+                LLMMessage(**m) if isinstance(m, dict) else m 
+                for m in kw["messages"]
+            ]
+            
         req_caps_dict = {}
         if context.zero_spend_mode:
             req_caps_dict["is_free_tier"] = True

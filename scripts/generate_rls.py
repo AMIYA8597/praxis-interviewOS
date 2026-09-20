@@ -118,6 +118,6 @@ create policy "feature_flags_delete_admin" on feature_flags for delete using (is
 """
 
 os.makedirs('supabase/migrations', exist_ok=True)
-with open('supabase/migrations/20260907235802_enable_rls_policies.sql', 'w') as f:
+with open('supabase/migrations/20260907235802_enable_rls_policies.sql', 'w', newline='\n', encoding='utf-8') as f:
     f.write(sql)
 print("Generated 20260907235802_enable_rls_policies.sql")

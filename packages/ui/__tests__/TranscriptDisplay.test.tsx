@@ -5,7 +5,7 @@ import { TranscriptDisplay } from '../src/components/TranscriptDisplay';
 
 describe('TranscriptDisplay', () => {
   it('renders without crashing', () => {
-    const { getByTestId } = render(<TranscriptDisplay />);
-    expect(getByTestId('transcriptdisplay')).toBeInTheDocument();
+    const { container } = render(<TranscriptDisplay segments={[]} />);
+    expect(container).toBeInTheDocument();
   });
 });

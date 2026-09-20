@@ -1,46 +1,109 @@
 import { useState, useCallback, useRef } from 'react';
 
+export type CaptureDiagnostic = {
+  os: string;
+  hasLoopback: boolean;
+  permissionGranted: boolean;
+  message: string;
+  fallbackToMic: boolean;
+};
+
 export function useAudioCapture(onAudioFrame?: (data: Float32Array) => void) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<CaptureDiagnostic | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const processorRef = useRef<AudioWorkletNode | null>(null);
   
   const startCapture = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false  // Don't auto-adjust gain; let VAD see natural levels
+      let stream: MediaStream;
+      let usedFallback = false;
+      let diagMessage = 'System audio capture successful.';
+      let hasLoopback = false;
+
+      // Capability detection
+      try {
+        const sources = await window.electronAPI.audioGetSources();
+        hasLoopback = sources.hasLoopback;
+      } catch (e) {
+        console.warn("Could not get audio sources from main", e);
+      }
+
+      try {
+        if (!hasLoopback) {
+          throw new Error("No loopback source detected by OS.");
         }
+        
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            mandatory: {
+              chromeMediaSource: 'desktop'
+            }
+          } as any,
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              maxWidth: 1,
+              maxHeight: 1
+            }
+          } as any
+        });
+        stream.getVideoTracks().forEach(track => track.stop());
+      } catch (systemErr: any) {
+        usedFallback = true;
+        diagMessage = `System audio capture unavailable: ${systemErr.message}. The OS restricts direct desktop audio capture. Falling back to microphone only. You may need to use speakers instead of headphones to capture the interviewer's voice.`;
+        
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: false
+          }
+        });
+      }
+
+      const os = await window.electronAPI.systemGetStatus().then((res: any) => res.os).catch(() => 'unknown');
+      setDiagnostic({
+        os,
+        hasLoopback,
+        permissionGranted: true,
+        message: diagMessage,
+        fallbackToMic: usedFallback
       });
       
       mediaStreamRef.current = stream;
-      const audioContext = new (window.AudioContext || 
-                               (window as any).webkitAudioContext)();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       audioContextRef.current = audioContext;
       
       const source = audioContext.createMediaStreamSource(stream);
+      const workletCode = `
+        class PCMProcessor extends AudioWorkletProcessor {
+          process(inputs, outputs, parameters) {
+            const input = inputs[0];
+            if (input.length > 0) {
+              const channelData = input[0];
+              this.port.postMessage(channelData);
+            }
+            return true;
+          }
+        }
+        registerProcessor('pcm-processor', PCMProcessor);
+      `;
+      const blob = new Blob([workletCode], { type: 'application/javascript' });
+      const workletUrl = URL.createObjectURL(blob);
       
-      // Create a script processor for frame-by-frame audio (Phase 2.11)
-      const processor = audioContext.createScriptProcessor(
-        4096,  // buffer size = ~85ms at 48kHz
-        1,     // input channels (mono)
-        1      // output channels
-      );
-      
-      processor.onaudioprocess = (event) => {
-        const audioData = event.inputBuffer.getChannelData(0);
-        // Send to backend via WebSocket (Phase 4.7 will wire this)
-        onAudioFrame?.(new Float32Array(audioData));
+      await audioContext.audioWorklet.addModule(workletUrl);
+      const processorNode = new AudioWorkletNode(audioContext, 'pcm-processor');
+      processorNode.port.onmessage = (event) => {
+        onAudioFrame?.(event.data);
       };
       
-      source.connect(processor);
-      processor.connect(audioContext.destination);
+      source.connect(processorNode);
+      processorNode.connect(audioContext.destination);
       
-      processorRef.current = processor;
+      processorRef.current = processorNode;
       setIsCapturing(true);
     } catch (err) {
       setError((err as Error).message);
@@ -54,5 +117,5 @@ export function useAudioCapture(onAudioFrame?: (data: Float32Array) => void) {
     setIsCapturing(false);
   }, []);
   
-  return { isCapturing, error, startCapture, stopCapture };
+  return { isCapturing, error, diagnostic, startCapture, stopCapture };
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useAudioFrameStream } from './useAudioFrameStream';
 import type { MainToRendererChannels } from '../../shared/ipc-types';
 
 export function useRealtimeSession(sessionId: string) {
@@ -6,11 +7,15 @@ export function useRealtimeSession(sessionId: string) {
   const [connected, setConnected] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   
+  // Create audio frame stream once connected
+  const { sendAudioFrame } = useAudioFrameStream(sessionId, wsRef.current);
+
   useEffect(() => {
     if (!sessionId) return;
     
     const token = localStorage.getItem('auth-token') || ''; 
-    const wsUrl = `${typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_WS_URL || 'ws://localhost:8001' : 'ws://localhost:8001'}/ws/sessions/${sessionId}`;
+    const envUrl = typeof process !== 'undefined' ? process.env.VITE_WS_URL : undefined;
+    const wsUrl = `${envUrl || 'ws://localhost:8001'}/ws/sessions/${sessionId}`;
     
     wsRef.current = new WebSocket(wsUrl);
     
@@ -23,18 +28,15 @@ export function useRealtimeSession(sessionId: string) {
       setConnected(true);
     };
     
+    // ONE-CHANGE DISCIPLINE: any new server event type must add both a dispatch line here and a corresponding listener wherever it's consumed, in the same change
     wsRef.current.onmessage = (event) => {
       try {
+        if (typeof event.data !== 'string') return;
         const data = JSON.parse(event.data);
         setEvents(prev => [...prev, data]);
         
-        // Dispatch to listeners (coaching HUD, transcript, etc.)
-        if (data.type === 'session.ready') {
-          console.log('Session ready');
-        } else if (data.type === 'session.metrics') {
-          // MetricsDisplay will listen to this
-          window.dispatchEvent(new CustomEvent('metrics-update', { detail: data }));
-        }
+        // Dispatch identical DOM event names to Envelope.type
+        window.dispatchEvent(new CustomEvent(data.type, { detail: data }));
       } catch (err) {
         console.error('Failed to parse WebSocket message', err);
       }
@@ -53,12 +55,6 @@ export function useRealtimeSession(sessionId: string) {
       wsRef.current?.close();
     };
   }, [sessionId]);
-  
-  const sendAudioFrame = useCallback((pcmData: Float32Array) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(pcmData.buffer);  // Binary WebSocket frame
-    }
-  }, []);
   
   return { connected, events, sendAudioFrame, ws: wsRef.current };
 }

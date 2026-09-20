@@ -1,0 +1,16 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/onboarding/page": "app/onboarding/page.js",
+  "/auth/page": "app/auth/page.js",
+  "/page": "app/page.js",
+  "/(dashboard)/admin/page": "app/(dashboard)/admin/page.js",
+  "/(dashboard)/analytics/page": "app/(dashboard)/analytics/page.js",
+  "/(dashboard)/platform/resume/page": "app/(dashboard)/platform/resume/page.js",
+  "/(dashboard)/settings/providers/page": "app/(dashboard)/settings/providers/page.js",
+  "/(dashboard)/sessions/page": "app/(dashboard)/sessions/page.js",
+  "/(dashboard)/platform/tracker/page": "app/(dashboard)/platform/tracker/page.js",
+  "/(dashboard)/candidates/page": "app/(dashboard)/candidates/page.js",
+  "/(dashboard)/study/page": "app/(dashboard)/study/page.js",
+  "/(dashboard)/jobs/[id]/page": "app/(dashboard)/jobs/[id]/page.js",
+  "/(dashboard)/sessions/[id]/debrief/page": "app/(dashboard)/sessions/[id]/debrief/page.js"
+}

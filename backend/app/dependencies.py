@@ -15,13 +15,7 @@ from packages.config.settings import settings
 logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
-# Stub gateway and storage until properly connected
-class AIGatewayStub:
-    def __init__(self):
-        self.status = "not yet configured"
-        
-class ObjectStorageStub:
-    pass
+# Stubs removed
 
 async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
     """Provide a per-request async SQLAlchemy session."""
@@ -107,39 +101,40 @@ async def get_current_candidate(
     return None
 
 async def require_admin(
-    user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session)
-) -> dict:
-    """Verify the user has admin privileges via DB query, not just JWT claim."""
-    user_id = user.get("sub")
-    
-    # We query the profiles table to see if is_admin is true, or similar logic
-    # In Stage 1 schema, candidates doesn't have is_admin, but we defined a function is_admin().
-    # Actually, Stage 1 SQL `is_admin()` uses auth.uid() and profiles.
-    query = text("SELECT is_admin FROM profiles WHERE id = :user_id")
-    result = await db.execute(query, {"user_id": user_id})
-    row = result.fetchone()
-    
-    if not row or not row[0]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
-        )
+):
+    """
+    Dependency that enforces admin access by querying the admin_users table.
+    """
+    try:
+        user_id = current_user.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=403, detail="Invalid user token")
+            
+        # Check admin_users table (existence of a row indicates admin status)
+        query = text("SELECT 1 FROM admin_users WHERE profile_id = :user_id")
+        result = await db.execute(query, {"user_id": user_id})
+        row = result.fetchone()
         
-    return user
+        if not row:
+            raise HTTPException(status_code=403, detail="Admin access required")
+            
+        return current_user
+    except HTTPException:
+        raise
+    except Exception as e:
+        # In a real app, log the exception. We return 500 for actual DB errors.
+        raise HTTPException(status_code=500, detail="Internal server error checking admin status")
 
-async def get_ai_gateway(request: Request) -> AIGatewayStub:
+async def get_ai_gateway(
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    redis: Redis = Depends(get_redis)
+):
     """Provide the AI gateway router instance."""
     return request.app.state.ai_gateway
 
-async def get_object_storage(request: Request) -> ObjectStorageStub:
-    """Provide the ObjectStorage protocol backend."""
-    return request.app.state.object_storage
-
-async def get_ai_gateway(request: Request) -> AIGatewayStub:
-    """Provide the AI gateway router instance."""
-    return request.app.state.ai_gateway
-
-async def get_object_storage(request: Request) -> ObjectStorageStub:
+async def get_object_storage(request: Request):
     """Provide the ObjectStorage protocol backend."""
     return request.app.state.object_storage

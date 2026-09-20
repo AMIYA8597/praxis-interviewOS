@@ -65,7 +65,7 @@ class AnthropicProvider(LLMProvider):
         return system, msgs
 
     async def generate(self, messages, cancellation_token=None, **kw):
-        return await with_cancellation(self._generate(messages, cancellation_token=None, **kw), cancellation_token)
+        return await with_cancellation(self._generate(messages, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _generate(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> LLMResponse:
         system, msgs = self._format_messages(messages)
@@ -127,7 +127,7 @@ class AnthropicProvider(LLMProvider):
             self._handle_error(e)
 
     async def structured(self, messages, schema, cancellation_token=None, **kw):
-        return await with_cancellation(self._structured(messages, schema, cancellation_token=None, **kw), cancellation_token)
+        return await with_cancellation(self._structured(messages, schema, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _structured(self, messages: list[LLMMessage], schema: type[BaseModel], cancellation_token: Any = None, **kw) -> BaseModel:
         # Anthropic doesn't have an exact `response_format: json_object`, 
@@ -138,7 +138,7 @@ class AnthropicProvider(LLMProvider):
         return schema.model_validate_json(resp.text)
 
     async def embed(self, texts, cancellation_token=None, **kw):
-        return await with_cancellation(self._embed(texts, cancellation_token=None, **kw), cancellation_token)
+        return await with_cancellation(self._embed(texts, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _embed(self, texts: list[str], cancellation_token: Any = None, **kw) -> list[list[float]]:
         raise NotImplementedError("Anthropic does not support embeddings")

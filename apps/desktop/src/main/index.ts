@@ -1,8 +1,9 @@
-import { app, BrowserWindow, ipcMain, Menu, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, globalShortcut, desktopCapturer } from 'electron';
 import * as path from 'path';
 import isDev from 'electron-is-dev';
-import { getAudioSources } from './audio';
+import { getAudioSources, setupAudioCapture } from './audio';
 import { getCredential, saveCredential } from './storage';
+import { setupScreenshotCapture, cleanupScreenshotCapture } from './capture';
 
 let mainWindow: BrowserWindow | null = null;
 let isSessionActive = false; // Mock for now
@@ -14,8 +15,6 @@ const createWindow = () => {
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
-      // @ts-ignore
-      enableRemoteModule: false,
       nodeIntegration: false,
       sandbox: true
     }
@@ -31,9 +30,12 @@ const createWindow = () => {
   mainWindow.on('close', (event) => {
     if (isSessionActive) {
       event.preventDefault();
-      mainWindow?.webContents.send('app:confirm-quit');
+      mainWindow?.webContents.send('app.confirmQuit');
     }
   });
+
+  setupScreenshotCapture(mainWindow);
+  setupAudioCapture();
 };
 
 app.whenReady().then(() => {
@@ -56,10 +58,6 @@ app.whenReady().then(() => {
   
   Menu.setApplicationMenu(menu);
 
-  globalShortcut.register('CmdOrCtrl+Shift+I', () => {
-    mainWindow?.webContents.send('hotkey:toggle-interview');
-  });
-
   app.on('activate', () => {
     if (mainWindow === null) createWindow();
   });
@@ -69,8 +67,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+app.on('will-quit', () => {
+  cleanupScreenshotCapture();
+});
+
 // IPC Handlers
-ipcMain.handle('get-system-status', () => {
+ipcMain.handle('system.getStatus', () => {
   return {
     os: process.platform,
     electron: process.versions.electron,
@@ -78,19 +80,74 @@ ipcMain.handle('get-system-status', () => {
   };
 });
 
-ipcMain.handle('get-audio-sources', async () => {
+ipcMain.handle('audio.getSources', async () => {
   return await getAudioSources();
 });
 
-ipcMain.handle('storage:save', (_event, key: string, value: string) => {
+ipcMain.handle('audio.startCapture', (_event, sourceId: string) => {
+  // Stub for audio start capture
+});
+
+ipcMain.handle('audio.stopCapture', () => {
+  // Stub for audio stop capture
+});
+
+ipcMain.handle('screen.getSources', async () => {
+  try {
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+    return sources.map(s => ({ id: s.id, name: s.name }));
+  } catch (e) {
+    return [];
+  }
+});
+
+ipcMain.handle('screen.captureNow', async () => {
+  // Explicitly trigger a capture without global shortcut
+  try {
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
+    if (sources.length > 0) {
+      const dataUrl = sources[0].thumbnail.toDataURL();
+      mainWindow?.webContents.send('screenshot.captureReady', dataUrl);
+    }
+  } catch (e) {
+    console.error("Manual capture failed:", e);
+  }
+});
+
+ipcMain.handle('shortcut.register', (_event, name: string, accelerator: string) => {
+  globalShortcut.register(accelerator, () => {
+    mainWindow?.webContents.send(`shortcut.${name}`);
+  });
+});
+
+ipcMain.handle('shortcut.unregister', (_event, name: string) => {
+  // Can't easily map name to accelerator here without state, but stub for now.
+});
+
+ipcMain.handle('storage.set', (_event, key: string, value: string) => {
   saveCredential(key, value);
 });
 
-ipcMain.handle('storage:get', (_event, key: string) => {
+ipcMain.handle('storage.get', (_event, key: string) => {
   return getCredential(key);
 });
 
-ipcMain.handle('auth:logout', (_event) => {
+ipcMain.handle('storage.delete', (_event, key: string) => {
+  saveCredential(key, '');
+});
+
+ipcMain.handle('auth.logout', (_event) => {
   saveCredential('auth-token', '');
-  mainWindow?.webContents.send('auth:updated', '');
+  mainWindow?.webContents.send('auth.updated', '');
+});
+
+// Keep backward compatible session handling temporarily if renderer still uses it?
+// Actually phase 4.3 handles fixing the renderer.
+ipcMain.handle('session.start', (_event, sessionId: string) => {
+  isSessionActive = true;
+  mainWindow?.webContents.send('session.started', sessionId);
+});
+
+ipcMain.handle('session.stop', () => {
+  isSessionActive = false;
 });

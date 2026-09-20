@@ -14,6 +14,13 @@ logger = logging.getLogger(__name__)
 class CoachingMetricsAccumulator:
     """
     Per-turn accumulator that updates incrementally on a FIXED 250ms timer.
+    
+    ### ORCHESTRATOR INTERFACE CONTRACT:
+    - **Initialization**: Instantiate once per session, passing `session_id` and an `enqueue_event_cb`.
+    - **`start_turn()`**: Call precisely when the state machine transitions to `CANDIDATE_TURN`. Starts the 250ms polling loop.
+    - **`update_text(partial_text: str)`**: Call whenever a new `transcript.partial` or `transcript.final` arrives from STT.
+    - **`register_vad_event(event_type: str)`**: Call with `"speech_start"` or `"speech_end"` when the VAD engine fires these events. Used to calculate pause gaps.
+    - **`end_turn()`**: Call precisely when the state machine leaves `CANDIDATE_TURN` (e.g. `TURN_END` or `SCORING`). Hard-cancels the 250ms polling loop.
     """
     def __init__(self, session_id: str, enqueue_event_cb: Callable[[Envelope, bool], None]):
         self.session_id = session_id

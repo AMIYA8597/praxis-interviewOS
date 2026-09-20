@@ -1,7 +1,7 @@
 import logging
 from typing import List, Dict
 
-# from app.rag.retrieval import hybrid_search
+from praxis_ai_gateway.retrieval import hybrid_search
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +19,22 @@ async def compute_explainable_match(db_session, candidate_id: str, job_requireme
         skill = req.get("skill")
         
         # 1. Hybrid Search against verified candidate facts
-        # evidence_chunks = await hybrid_search(db_session, query=skill, ...)
-        evidence_chunks = [] # Stub
+        evidence_chunks = await hybrid_search(
+            query=skill,
+            candidate_id=candidate_id,
+            db=db_session,
+            k=2,
+            boost_verified=True
+        )
         
         if len(evidence_chunks) > 1:
             match_level = "matched"
             points = 2
-            evidence = evidence_chunks[0].get("content")
+            evidence = evidence_chunks[0].content
         elif len(evidence_chunks) == 1:
             match_level = "partial"
             points = 1
-            evidence = evidence_chunks[0].get("content")
+            evidence = evidence_chunks[0].content
         else:
             match_level = "missing"
             points = 0

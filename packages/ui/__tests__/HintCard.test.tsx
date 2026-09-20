@@ -5,7 +5,7 @@ import { HintCard } from '../src/components/HintCard';
 
 describe('HintCard', () => {
   it('renders without crashing', () => {
-    const { getByTestId } = render(<HintCard />);
-    expect(getByTestId('hintcard')).toBeInTheDocument();
+    const { getByText } = render(<HintCard hint="Test hint" level={1} />);
+    expect(getByText('Test hint')).toBeInTheDocument();
   });
 });

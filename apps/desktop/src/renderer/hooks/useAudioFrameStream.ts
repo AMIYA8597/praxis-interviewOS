@@ -14,9 +14,9 @@ export function useAudioFrameStream(sessionId: string, ws: WebSocket | null) {
       // Frame header: 4 bytes seq + 8 bytes timestamp + 4 bytes length
       const header = new ArrayBuffer(16);
       const headerView = new DataView(header);
-      headerView.setUint32(0, seqRef.current++, true);
-      headerView.setFloat64(4, timestamp, true);
-      headerView.setUint32(12, pcm16.byteLength, true);
+      headerView.setUint32(0, seqRef.current++, false);
+      headerView.setFloat64(4, timestamp, false);
+      headerView.setUint32(12, pcm16.byteLength, false);
       
       // Send header + PCM as binary frames
       ws.send(header);

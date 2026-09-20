@@ -10,7 +10,7 @@ from backend.app.schemas.common import PaginatedResponse
 
 router = APIRouter(tags=['projects'])
 
-@router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
     project_data: ProjectCreate,
     candidate: dict = Depends(get_current_candidate),
@@ -30,7 +30,7 @@ async def create_project(
     await db.commit()
     return dict(row._mapping)
 
-@router.get("", response_model=PaginatedResponse[ProjectResponse])
+@router.get("/projects", response_model=PaginatedResponse[ProjectResponse])
 async def list_projects(
     cursor: Optional[str] = Query(None, description="Cursor formatted as 'timestamp_uuid'"),
     limit: int = Query(20, ge=1, le=100),
@@ -70,7 +70,7 @@ async def list_projects(
         
     return {"items": items, "next_cursor": next_cursor}
 
-@router.get("/{id}", response_model=ProjectResponse)
+@router.get("/projects/{id}", response_model=ProjectResponse)
 async def get_project(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
@@ -83,7 +83,7 @@ async def get_project(
         raise HTTPException(status_code=404, detail="Project not found")
     return dict(row._mapping)
 
-@router.patch("/{id}", response_model=ProjectResponse)
+@router.patch("/projects/{id}", response_model=ProjectResponse)
 async def update_project(
     id: uuid.UUID,
     update_data: ProjectUpdate,
@@ -117,7 +117,7 @@ async def update_project(
         raise HTTPException(status_code=404, detail="Project not found")
     return dict(row._mapping)
 
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/projects/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),

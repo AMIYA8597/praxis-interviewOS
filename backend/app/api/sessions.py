@@ -10,7 +10,7 @@ from backend.app.schemas.common import PaginatedResponse
 
 router = APIRouter(tags=['sessions'])
 
-@router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(
     session_data: SessionCreate,
     candidate: dict = Depends(get_current_candidate),
@@ -39,7 +39,7 @@ async def create_session(
     await db.commit()
     return dict(row._mapping)
 
-@router.get("", response_model=PaginatedResponse[SessionResponse])
+@router.get("/sessions", response_model=PaginatedResponse[SessionResponse])
 async def list_sessions(
     cursor: Optional[str] = Query(None, description="Cursor formatted as 'timestamp_uuid'"),
     limit: int = Query(20, ge=1, le=100),
@@ -79,7 +79,7 @@ async def list_sessions(
         
     return {"items": items, "next_cursor": next_cursor}
 
-@router.get("/{id}", response_model=SessionResponse)
+@router.get("/sessions/{id}", response_model=SessionResponse)
 async def get_session(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
@@ -97,7 +97,7 @@ async def get_session(
         
     return dict(row._mapping)
 
-@router.get("/{id}/turns")
+@router.get("/sessions/{id}/turns")
 async def get_session_turns(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
@@ -112,7 +112,7 @@ async def get_session_turns(
     result = await db.execute(query, {"id": str(id)})
     return [dict(r._mapping) for r in result.fetchall()]
 
-@router.get("/{id}/debrief")
+@router.get("/sessions/{id}/debrief")
 async def get_session_debrief(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
@@ -123,11 +123,14 @@ async def get_session_debrief(
     if not check.fetchone():
         raise HTTPException(status_code=404, detail="Session not found")
         
-    query = text("SELECT id, overall_score, strengths, areas_for_improvement, recommendations FROM session_debriefs WHERE session_id = :id")
+    query = text("SELECT id, headline_metrics, strengths, weaknesses, flagged_claims, jd_coverage FROM session_debriefs WHERE session_id = :id")
     result = await db.execute(query, {"id": str(id)})
     row = result.fetchone()
     if not row:
         return {} # No debrief yet
         
-    return dict(row._mapping)
+    mapping = dict(row._mapping)
+    # The API might be expecting the old schema structure on the frontend, but we should return what we have
+    # Actually, returning the real columns is safer than trying to remap if they are completely different
+    return mapping
 

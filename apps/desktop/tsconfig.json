@@ -2,7 +2,6 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
       "@praxis/ui": ["../../packages/ui/src"],
@@ -10,5 +9,5 @@
       "@praxis/config": ["../../packages/config/src"]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "../../packages/ui/src/**/*", "../../packages/types/src/**/*"]
 }
