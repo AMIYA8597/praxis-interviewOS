@@ -1,0 +1,64 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: praxis
+          POSTGRES_PASSWORD: dev_password
+          POSTGRES_DB: praxis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt || pip install pytest pytest-asyncio sqlalchemy asyncpg psycopg2-binary
+        pip install -e backend/ || echo "backend package not installable in editable mode, using PYTHONPATH"
+        
+    - name: Run Migrations
+      env:
+        DATABASE_URL: "postgresql://praxis:dev_password@localhost:5432/praxis"
+      run: |
+        python scripts/migrate.py
+        
+    - name: Run RLS CI Guard Tests (Sync)
+      env:
+        DATABASE_URL: "postgresql://praxis:dev_password@localhost:5432/praxis"
+        PYTHONPATH: "."
+      run: |
+        pytest tests/security/test_rls_enabled.py
+        pytest tests/security/test_rls_isolation.py
+
+    - name: Run RLS Isolation Tests (Async)
+      env:
+        DATABASE_URL: "postgresql+asyncpg://praxis:dev_password@localhost:5432/praxis"
+        PYTHONPATH: "."
+      run: |
+        pytest backend/tests/security/test_rls_isolation.py
+        pytest backend/tests/security/test_rls_storage.py
+        pytest backend/tests/integration/test_rls_bypass.py

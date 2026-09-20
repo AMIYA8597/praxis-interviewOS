@@ -25,7 +25,7 @@ async def _process_resume_inner(ctx: Dict[str, Any], document_id: str):
     db = ctx['db_engine']
     redis = ctx.get('redis') # using get for tests
     
-    from backend.storage.local import get_object_storage
+    from backend.app.core.storage import get_storage_client as get_object_storage
     from praxis_ai_gateway.router import GatewayRouter, RoutingContext
     from praxis_ai_gateway.registry import ModelRegistry
     from praxis_ai_gateway.base import LLMMessage
@@ -212,7 +212,7 @@ async def cleanup_old_sessions(ctx: Dict[str, Any]):
 
 async def purge_expired_retention_data(ctx: Dict[str, Any]):
     db = ctx['db_engine']
-    from backend.storage.local import get_object_storage
+    from backend.app.core.storage import get_storage_client as get_object_storage
     storage = get_object_storage()
     
     async with db.begin() as conn:
@@ -275,7 +275,7 @@ async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str
         span.set_attribute("candidate_id", candidate_id)
         
         db = ctx['db_engine']
-        from backend.storage.local import get_object_storage
+        from backend.app.core.storage import get_storage_client as get_object_storage
         storage = get_object_storage()
         
         from backend.app.core.deletion import DeletionService

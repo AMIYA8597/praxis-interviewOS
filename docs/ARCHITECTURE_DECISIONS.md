@@ -321,6 +321,13 @@ We deleted the custom jitter buffer and sequence reordering logic in `transport.
 **Date:** 2026-09-20
 **Context:** The SQL migrations use 'MOCK' and 'local dev only' comments for defining auth primitives and schemas (e.g. auth.uid(), storage schema/tables) that are pre-provided by Supabase.
 **Decision:** The migrations use "CREATE OR REPLACE FUNCTION", "CREATE SCHEMA IF NOT EXISTS", and "CREATE TABLE IF NOT EXISTS" for these primitives. This makes the migrations completely safe and idempotent for real-Supabase deployments. In a real Supabase environment, the existing Supabase schemas (auth, storage) will be untouched, and our mock auth.uid() definition uses dynamic current_setting, which avoids colliding with real Supabase internals if used correctly.
+**Migration Tool Choice:** When deploying to a real, hosted Supabase project, you must use `scripts/migrate.py` pointed at the real project's connection string via the `DATABASE_URL` environment variable. The hardcoded `postgresql://praxis:dev_password@localhost:5432/praxis` is strictly a local-fallback default.
+
+**First-Time Real-Supabase Setup Checklist:**
+1. **Link the Project:** Use the Supabase CLI (`supabase link`) or fetch your real database connection string.
+2. **Verify Primitives:** Confirm the real Supabase `auth.uid()` and `authenticated` role exist. The idempotent migrations will not overwrite them.
+3. **Set Environment Variable:** Export `DATABASE_URL` with your real connection string (e.g., `export DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres`).
+4. **Run Migrations:** Execute `python scripts/migrate.py` to apply all migrations idempotently to the real project.
 
 ## ADR-020: Enforcing UI Design Consistency (Dark Theme)
 **Date:** 2026-09-20

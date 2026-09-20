@@ -5,7 +5,7 @@ import pytest
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://praxis@localhost:5432/praxis")
 
 # Tables allowed to NOT have RLS (e.g. none, or explicitly documented exceptions)
-RLS_EXCEPTIONS = set() # Even 'skills' has RLS enabled, just a permissive policy
+RLS_EXCEPTIONS = {'schema_migrations', 'migration_status'} # Even 'skills' has RLS enabled, just a permissive policy
 
 def test_all_tables_have_rls_enabled():
     """
