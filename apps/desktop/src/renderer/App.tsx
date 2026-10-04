@@ -37,7 +37,8 @@ export function App() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
-    if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'missing') {
+    const supabaseUrl = typeof process !== 'undefined' && process.env.VITE_SUPABASE_URL ? process.env.VITE_SUPABASE_URL : undefined;
+    if (!supabaseUrl || supabaseUrl === 'missing') {
       setAuthError('Supabase is not configured. Authentication unavailable.');
       return;
     }

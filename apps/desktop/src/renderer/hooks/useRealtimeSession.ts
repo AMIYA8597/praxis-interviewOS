@@ -20,7 +20,8 @@ export function useRealtimeSession(sessionId: string) {
       if (isCancelled) return;
       const token = session?.access_token || ''; 
       
-      const envUrl = typeof process !== 'undefined' ? process.env.VITE_WS_URL : import.meta.env.VITE_WS_URL;
+      // process.env is set by Electron/Vite; safe for Jest (no import.meta in test context)
+      const envUrl = typeof process !== 'undefined' && process.env.VITE_WS_URL ? process.env.VITE_WS_URL : undefined;
       const wsUrl = `${envUrl || 'ws://localhost:8001'}/ws/sessions/${sessionId}`;
       
       wsRef.current = new WebSocket(wsUrl);

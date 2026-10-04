@@ -18,7 +18,7 @@ export function PracticeArenaPage() {
         return;
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const apiUrl = (typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined) || 'http://localhost:8000';
       const response = await fetch(`${apiUrl}/api/v1/sessions`, {
         method: 'POST',
         headers: {

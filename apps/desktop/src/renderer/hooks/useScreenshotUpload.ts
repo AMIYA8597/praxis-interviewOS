@@ -14,7 +14,7 @@ export function useScreenshotUpload() {
       const token = session?.access_token || '';
       
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/v1/study/screenshots/solve`,
+        `${(typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined) || 'http://localhost:8000'}/api/v1/study/screenshots/solve`,
         {
           method: 'POST',
           headers: {
