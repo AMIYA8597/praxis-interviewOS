@@ -1,19 +1,25 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+
+export type CaptureState = 'SCREEN_CAPTURE_OFF' | 'SCREEN_CAPTURE_READY' | 'CAPTURING' | 'UPLOAD_PENDING' | 'UPLOADED' | 'FAILED';
 
 export function useScreenshotUpload() {
-  const [uploading, setUploading] = useState(false);
+  const [captureState, setCaptureState] = useState<CaptureState>('SCREEN_CAPTURE_OFF');
   const [result, setResult] = useState<any>(null);
   
-  const uploadScreenshot = async (screenshotBase64: string) => {
-    setUploading(true);
+  const uploadScreenshot = useCallback(async (screenshotBase64: string) => {
+    setCaptureState('UPLOAD_PENDING');
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
+      
       const response = await fetch(
-        `${(typeof process !== 'undefined' ? process.env.VITE_API_URL : '') || 'http://localhost:8000'}/api/v1/study/screenshots/solve`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/v1/study/screenshots/solve`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             image_base64: screenshotBase64,
@@ -26,12 +32,12 @@ export function useScreenshotUpload() {
       if (!response.ok) throw new Error(data.message || 'Error from server');
       
       setResult(data);
+      setCaptureState('UPLOADED');
     } catch (err) {
       console.error('Screenshot upload failed', err);
-    } finally {
-      setUploading(false);
+      setCaptureState('FAILED');
     }
-  };
+  }, []);
   
-  return { uploading, result, uploadScreenshot };
+  return { captureState, setCaptureState, result, uploadScreenshot };
 }

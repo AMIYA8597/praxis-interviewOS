@@ -74,7 +74,8 @@ export function useAudioCapture(onAudioFrame?: (data: Float32Array) => void) {
       });
       
       mediaStreamRef.current = stream;
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioContextClass({ sampleRate: 16000 });
       audioContextRef.current = audioContext;
       
       const source = audioContext.createMediaStreamSource(stream);

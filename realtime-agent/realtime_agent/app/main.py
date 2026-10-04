@@ -461,9 +461,29 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
                 break
 
             if message.get("bytes") is not None:
-                pcm = message["bytes"]
+                raw_bytes = message["bytes"]
+                if len(raw_bytes) < 18:
+                    send_error("malformed_audio_frame", "Binary frame is too small for header")
+                    continue
+                import struct
+                try:
+                    proto_ver, frame_type, client_seq, capture_ts, payload_len = struct.unpack(">BBIdI", raw_bytes[:18])
+                except Exception:
+                    send_error("malformed_audio_frame", "Failed to parse binary header")
+                    continue
+                if proto_ver != 1:
+                    send_error("unsupported_protocol", f"Unsupported protocol version: {proto_ver}")
+                    continue
+                if payload_len > 1024 * 1024:
+                    send_error("oversized_frame", "Audio frame payload exceeds maximum size")
+                    continue
+                pcm = raw_bytes[18:]
+                if len(pcm) != payload_len:
+                    send_error("malformed_audio_frame", "Payload length mismatch")
+                    continue
+                    
                 enqueue_event(Envelope(type="audio.frame_ack", session_id=session_id, sequence=0,
-                                       payload={"length": len(pcm), "server_seq": seq["next"]}))
+                                       payload={"length": len(pcm), "client_seq": client_seq, "server_seq": seq["next"]}))
                 if transcriber is not None:
                     try:
                         await transcriber.send_audio(pcm)

@@ -13,12 +13,8 @@ export default function AuthPage() {
     e.preventDefault();
     setMessage("Processing...");
 
-    // Fast-path mock for local dev if Supabase is unconfigured
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      setMessage("Running in Mock Mode. Please configure Supabase for real auth.");
-      setTimeout(() => {
-        window.location.href = "/onboarding";
-      }, 1000);
+      setMessage("Error: Supabase is not configured. Authentication unavailable.");
       return;
     }
 

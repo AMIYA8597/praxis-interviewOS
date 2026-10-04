@@ -11,16 +11,26 @@ export function useAudioFrameStream(sessionId: string, ws: WebSocket | null) {
       const pcm16 = float32ToPCM16(float32Data);
       const timestamp = Date.now() / 1000;  // Client-side capture timestamp
       
-      // Frame header: 4 bytes seq + 8 bytes timestamp + 4 bytes length
-      const header = new ArrayBuffer(16);
-      const headerView = new DataView(header);
-      headerView.setUint32(0, seqRef.current++, false);
-      headerView.setFloat64(4, timestamp, false);
-      headerView.setUint32(12, pcm16.byteLength, false);
+      const headerLength = 18;
+      const totalLength = headerLength + pcm16.byteLength;
+      const combined = new Uint8Array(totalLength);
+      const dataView = new DataView(combined.buffer);
       
-      // Send header + PCM as binary frames
-      ws.send(header);
-      ws.send(pcm16.buffer);
+      // Protocol version: 1
+      dataView.setUint8(0, 1);
+      // Frame type: 1 (AUDIO_FRAME)
+      dataView.setUint8(1, 1);
+      // Sequence
+      dataView.setUint32(2, seqRef.current++, false);
+      // Timestamp
+      dataView.setFloat64(6, timestamp, false);
+      // Payload length
+      dataView.setUint32(14, pcm16.byteLength, false);
+      
+      // Copy PCM payload
+      combined.set(new Uint8Array(pcm16.buffer), 18);
+      
+      ws.send(combined.buffer);
     }
   };
 }

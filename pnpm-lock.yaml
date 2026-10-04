@@ -77,6 +77,9 @@ importers:
       '@praxis/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@supabase/supabase-js':
+        specifier: ^2.115.0
+        version: 2.115.0
       electron-is-dev:
         specifier: ^3.0.1
         version: 3.0.1
