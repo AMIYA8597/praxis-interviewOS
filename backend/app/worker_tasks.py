@@ -51,7 +51,7 @@ async def record_dead_letter(ctx: Dict[str, Any], job_name: str, args: tuple, kw
             await conn.execute(
                 text("""
                     INSERT INTO failed_jobs (job_name, job_id, args, error_message, candidate_id)
-                    VALUES (:name, :jid, CAST(:args AS jsonb), :err, CAST(:cid AS uuid))
+                    VALUES (:name, :jid, CAST(:args AS jsonb), :err, :cid)
                 """),
                 {
                     "name": job_name,
@@ -130,13 +130,14 @@ import contextlib
 async def user_db_conn(db_engine, candidate_id: str):
     async with db_engine.begin() as conn:
         claims = json.dumps({"sub": candidate_id})
-        await conn.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
+        if getattr(getattr(db_engine, "dialect", None), "name", "") != "sqlite":
+            await conn.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
         yield conn
 
 async def _set_doc_status(db_engine, candidate_id: str, document_id: str, status: str, error: Optional[str] = None) -> None:
     async with user_db_conn(db_engine, candidate_id) as conn:
         await conn.execute(
-            text("UPDATE documents SET processing_status = :s, error_message = :e WHERE id = CAST(:id AS uuid) AND candidate_id = CAST(:cid AS uuid)"),
+            text("UPDATE documents SET processing_status = :s, error_message = :e WHERE id = :id AND candidate_id = :cid"),
             {"s": status, "e": error, "id": document_id, "cid": candidate_id},
         )
 
@@ -158,7 +159,7 @@ async def process_resume(ctx: Dict[str, Any], document_id: str):
                 text("""
                     SELECT d.id, d.candidate_id, d.storage_path, d.mime_type, d.original_filename, r.id AS resume_id
                     FROM documents d LEFT JOIN resumes r ON r.document_id = d.id
-                    WHERE d.id = CAST(:id AS uuid)
+                    WHERE d.id = :id
                 """),
                 {"id": document_id},
             )
@@ -325,7 +326,7 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
     async with admin_db.begin() as conn:
         row = (
             await conn.execute(
-                text("SELECT id, candidate_id, raw_jd_text FROM jobs WHERE id = CAST(:id AS uuid)"), {"id": job_id}
+                text("SELECT id, candidate_id, raw_jd_text FROM jobs WHERE id = :id"), {"id": job_id}
             )
         ).first()
         if row is None:
@@ -336,7 +337,7 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
     
     async with user_db_conn(db, candidate_id) as conn:
         await conn.execute(
-            text("UPDATE jobs SET processing_status = 'parsing', error_message = NULL WHERE id = CAST(:id AS uuid)"),
+            text("UPDATE jobs SET processing_status = 'parsing', error_message = NULL WHERE id = :id"),
             {"id": job_id},
         )
 
@@ -361,7 +362,7 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
             raise
         async with user_db_conn(db, candidate_id) as conn:
             await conn.execute(
-                text("UPDATE jobs SET processing_status = 'failed', error_message = :e WHERE id = CAST(:id AS uuid)"),
+                text("UPDATE jobs SET processing_status = 'failed', error_message = :e WHERE id = :id"),
                 {"id": job_id, "e": "AI analysis unavailable; please retry later"},
             )
         raise PermanentJobError(f"analysis failed: {type(e).__name__}") from e
@@ -373,7 +374,7 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
             await conn.execute(
                 text("""
                     INSERT INTO job_blueprints (job_id, top_skills, likely_topics, summary)
-                    VALUES (CAST(:j AS uuid), CAST(:skills AS jsonb), :topics, :summary)
+                    VALUES (:j, CAST(:skills AS jsonb), :topics, :summary)
                     ON CONFLICT (job_id) DO UPDATE
                       SET top_skills = EXCLUDED.top_skills, likely_topics = EXCLUDED.likely_topics,
                           summary = EXCLUDED.summary
@@ -409,7 +410,7 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
         await conn.execute(
             text("""
                 UPDATE jobs SET processing_status = 'ready', seniority_signal = :sen, error_message = NULL
-                WHERE id = CAST(:id AS uuid)
+                WHERE id = :id
             """),
             {"id": job_id, "sen": bp.seniority_signal},
         )
@@ -447,7 +448,8 @@ async def generate_session_debrief_job(ctx: Dict[str, Any], session_id: str):
     import json
     claims = json.dumps({"sub": candidate_id})
     async with factory() as session:
-        await session.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
+        if getattr(getattr(session.bind, "dialect", None), "name", "") != "sqlite":
+            await session.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
         result = await generate_session_debrief(session_id, session, _gateway(ctx), user_id=candidate_id)
         await persist_session_debrief(session, session_id, result)
         await session.commit()
@@ -466,7 +468,7 @@ async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str
     db = ctx["db_engine"]
     async with user_db_conn(db, candidate_id) as conn:
         await conn.execute(
-            text("UPDATE deletion_jobs SET status = 'running', updated_at = NOW() WHERE id = CAST(:id AS uuid)"),
+            text("UPDATE deletion_jobs SET status = 'running', updated_at = NOW() WHERE id = :id"),
             {"id": deletion_job_id},
         )
     try:
@@ -485,7 +487,7 @@ async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str
             await conn.execute(
                 text("""
                     UPDATE deletion_jobs SET status = 'failed', error_message = :err, updated_at = NOW()
-                    WHERE id = CAST(:id AS uuid)
+                    WHERE id = :id
                 """),
                 {"id": deletion_job_id, "err": f"{type(e).__name__}"},
             )
@@ -496,7 +498,7 @@ async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str
                 UPDATE deletion_jobs
                 SET status = 'completed', completed_at = NOW(), updated_at = NOW(),
                     rows_deleted_summary = CAST(:summary AS jsonb), error_message = NULL
-                WHERE id = CAST(:id AS uuid)
+                WHERE id = :id
             """),
             {"id": deletion_job_id, "summary": json.dumps(summary, default=str)},
         )
@@ -534,7 +536,7 @@ async def generate_study_material_job(ctx: Dict[str, Any], topic: str, difficult
         await conn.execute(
             text("""
                 INSERT INTO study_items (id, candidate_id, topic, source, prompt, reference_answer, difficulty)
-                VALUES (CAST(:id AS uuid), CAST(:cid AS uuid), :topic, 'generated', :prompt, :ref, :diff)
+                VALUES (:id, :cid, :topic, 'generated', :prompt, :ref, :diff)
             """),
             {
                 "id": item_id,

@@ -21,7 +21,7 @@ def create_access_token(data: dict):
 @pytest.fixture
 def patch_auth(monkeypatch):
     async def mock_verify(token, redis):
-        return {"sub": "test-user-id"}
+        return {"sub": "00000000-0000-0000-0000-000000000000"}
     monkeypatch.setattr("realtime_agent.app.main.verify_jwt", mock_verify)
 
 @pytest_asyncio.fixture
@@ -39,9 +39,9 @@ async def setup_db():
         await conn.execute(text("CREATE TABLE session_claims (id TEXT, session_id TEXT, turn_id TEXT, claim_text TEXT, supported BOOLEAN)"))
         
     async with engine.connect() as conn:
-        await conn.execute(text("INSERT INTO candidates (id, profile_id, full_name) VALUES ('test-cand', 'test-user-id', 'Test Candidate')"))
-        await conn.execute(text("INSERT INTO practice_sessions (id, candidate_id, job_id) VALUES ('test-session', 'test-cand', 'test-job')"))
-        await conn.execute(text("INSERT INTO job_blueprints (job_id, summary) VALUES ('test-job', '{}')"))
+        await conn.execute(text("INSERT INTO candidates (id, profile_id, full_name) VALUES ('70733de4-b0e3-46f6-b9c5-0bf25dde6f75', '00000000-0000-0000-0000-000000000000', 'Test Candidate')"))
+        await conn.execute(text("INSERT INTO practice_sessions (id, candidate_id, job_id) VALUES ('f2b48ce0-1668-42a4-aea5-0aca2954901f', '70733de4-b0e3-46f6-b9c5-0bf25dde6f75', 'd1c9ef0d-9b51-41b9-a9a7-9e0c52eb9b8a')"))
+        await conn.execute(text("INSERT INTO job_blueprints (job_id, summary) VALUES ('d1c9ef0d-9b51-41b9-a9a7-9e0c52eb9b8a', '{}')"))
         await conn.commit()
     yield
     await engine.dispose()
@@ -77,7 +77,7 @@ async def test_end_to_end_session(setup_db, patch_auth, monkeypatch):
     monkeypatch.setattr("praxis_ai_gateway.transcription.router.select_transcriber", lambda *args: MockTranscriber())
     
     # Mock Gateway Route for scoring and debrief to speed things up and avoid real API keys if not present
-    async def mock_route(alias, ctx, mode, messages, schema, **kw):
+    async def mock_route(self, alias, ctx=None, mode=None, messages=None, schema=None, **kw):
         from unittest.mock import MagicMock
         from realtime_agent.app.scoring.models import AnswerScore
         from realtime_agent.app.interview.debrief import SessionDebrief, HeadlineMetrics
@@ -126,12 +126,12 @@ async def test_end_to_end_session(setup_db, patch_auth, monkeypatch):
             return {"confidence": 0.9, "energy_db": -20}, None
     monkeypatch.setattr("realtime_agent.app.audio.vad.VoiceActivityDetector", MockVAD)
 
-    token = create_access_token({"sub": "test-user-id"})
+    token = create_access_token({"sub": "00000000-0000-0000-0000-000000000000"})
     
     # Actually we can use FastAPI test client for websockets
     from fastapi.testclient import TestClient
     with TestClient(app) as client:
-        with client.websocket_connect(f"/ws/sessions/test-session?token={token}") as websocket:
+        with client.websocket_connect(f"/ws/sessions/f2b48ce0-1668-42a4-aea5-0aca2954901f?token={token}") as websocket:
             # We should receive some initial events
             # WARMING, READY, INTERVIEWER_TURN
             events = []

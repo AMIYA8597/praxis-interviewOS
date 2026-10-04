@@ -16,7 +16,6 @@ async def test_connection_pool_isolation():
     
     engine = create_async_engine(
         settings.async_database_url, 
-        poolclass=QueuePool, 
         pool_size=1, 
         max_overflow=0
     )

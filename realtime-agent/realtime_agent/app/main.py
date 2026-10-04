@@ -158,7 +158,7 @@ async def _load_session(factory, session_id: str, user_id: str) -> Optional[Dict
                 info["difficulty"] = extra.difficulty
                 info["interview_type"] = extra.interview_type
         except Exception as e:
-            logger.info("session_enrichment_unavailable", extra={"error_type": type(e).__name__})
+            logger.info("session_enrichment_unavailable", extra={"error_type": str(e)})
             await db.rollback()
         return info
 
@@ -172,12 +172,13 @@ async def _mark_status(factory, session_id: str, status: str, user_id: str, *, s
     try:
         async with factory() as db:
             claims = json.dumps({"sub": user_id})
-            await db.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
-            await db.execute(text(f"UPDATE practice_sessions SET {', '.join(sets)} WHERE id = CAST(:sid AS uuid)"), {"st": status, "sid": session_id})
+            if getattr(getattr(db.bind, "dialect", None), "name", "") != "sqlite":
+                await db.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
+            await db.execute(text(f"UPDATE practice_sessions SET {', '.join(sets)} WHERE id = :sid"), {"st": status, "sid": session_id})
             await db.commit()
     except Exception as e:
         # Older/test schemas may lack started_at; fall back to status only.
-        logger.warning("session_status_update_failed", extra={"session_id": session_id, "error_type": type(e).__name__})
+        logger.warning("session_status_update_failed", extra={"session_id": session_id, "error_type": str(e)})
         if started or ended:
             await _mark_status(factory, session_id, status, user_id)
 
@@ -202,7 +203,7 @@ def create_app() -> FastAPI:
                 await session.execute(text("SELECT 1"))
             return {"status": "ready", "active_connections": app.state.active_connections}
         except Exception as e:
-            return JSONResponse(status_code=503, content={"status": "not_ready", "reason": type(e).__name__})
+            return JSONResponse(status_code=503, content={"status": "not_ready", "reason": str(e)})
 
     @app.websocket("/ws/sessions/{session_id}")
     async def websocket_session(websocket: WebSocket, session_id: str, token: str = None):
@@ -244,7 +245,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
         await _close(websocket, WS_AUTH_FAILED, "Invalid or expired session")
         return
     except Exception as e:
-        logger.exception("ws_auth_error", extra={"session_id": session_id, "error_type": type(e).__name__})
+        logger.exception("ws_auth_error", extra={"session_id": session_id, "error_type": str(e)})
         await _close(websocket, WS_INTERNAL, "Internal error")
         return
     user_id = str(claims.get("sub"))
@@ -255,7 +256,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
     try:
         info = await _load_session(factory, session_id, user_id)
     except Exception as e:
-        logger.error("ws_session_lookup_failed", extra={"session_id": session_id, "error_type": type(e).__name__})
+        logger.error("ws_session_lookup_failed", extra={"session_id": session_id, "error_type": str(e)})
         await _close(websocket, WS_INTERNAL, "Internal error")
         return
     if info is None:
@@ -271,7 +272,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
     try:
         cached_state = await redis.hgetall(state_key)
     except Exception as e:
-        logger.warning("ws_reconnect_state_unavailable", extra={"error_type": type(e).__name__})
+        logger.warning("ws_reconnect_state_unavailable", extra={"error_type": str(e)})
         cached_state = {}
     cached = {_s(k): _s(v) for k, v in (cached_state or {}).items()}
     is_reconnect = cached.get("state") == "RECONNECTING"
@@ -310,7 +311,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
                 else:
                     await websocket.send_text(msg.model_dump_json())
             except Exception as e:
-                logger.info("ws_send_stopped", extra={"session_id": session_id, "error_type": type(e).__name__})
+                logger.info("ws_send_stopped", extra={"session_id": session_id, "error_type": str(e)})
                 break
             finally:
                 outbound_queue.task_done()
@@ -332,9 +333,10 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
     try:
         import json
         claims_json = json.dumps({"sub": user_id})
-        await db.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims_json})
+        if getattr(db.bind.dialect, "name", "") != "sqlite":
+            await db.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims_json})
     except Exception as e:
-        logger.error("ws_session_set_config_failed", extra={"session_id": session_id, "error_type": type(e).__name__})
+        logger.error("ws_session_set_config_failed", extra={"session_id": session_id, "error_type": str(e)})
         await db.close()
         await _close(websocket, WS_INTERNAL, "Internal error")
         return
@@ -409,7 +411,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                logger.error("no_answer_watchdog_error", extra={"error_type": type(e).__name__})
+                logger.error("no_answer_watchdog_error", extra={"error_type": str(e)})
 
     def spawn(coro, name: str):
         async def _guard():
@@ -418,7 +420,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                logger.exception("session_task_failed", extra={"task": name, "error_type": type(e).__name__})
+                logger.exception("session_task_failed", extra={"task": name, "error_type": str(e)})
                 send_error("internal", "A session step failed; the interview will continue.")
 
         t = asyncio.create_task(_guard())
@@ -578,7 +580,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
         pass
     except Exception as e:
         close_reason = "server_error"
-        logger.exception("ws_session_error", extra={"session_id": session_id, "error_type": type(e).__name__})
+        logger.exception("ws_session_error", extra={"session_id": session_id, "error_type": str(e)})
     finally:
         app.state.active_connections = max(0, app.state.active_connections - 1)
         for t in background:
@@ -643,7 +645,7 @@ async def _save_for_reconnect(app, sm, orchestrator, session_id, state_key, conn
         # Keep the key past the grace period so the reaper can read it.
         await redis.expire(state_key, grace + 60)
     except Exception as e:
-        logger.error("ws_reconnect_save_failed", extra={"session_id": session_id, "error_type": type(e).__name__})
+        logger.error("ws_reconnect_save_failed", extra={"session_id": session_id, "error_type": str(e)})
         return
 
     async def reap_if_not_reconnected():
@@ -655,7 +657,8 @@ async def _save_for_reconnect(app, sm, orchestrator, session_id, state_key, conn
                 return
             async with app.state.db_session_factory() as cleanup_db:
                 claims_json = json.dumps({"sub": user_id})
-                await cleanup_db.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims_json})
+                if getattr(cleanup_db.bind.dialect, "name", "") != "sqlite":
+                    await cleanup_db.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims_json})
                 reaper = SessionManager(session_id, cleanup_db, lambda *a, **k: None)
                 reaper.sm.state = SessionState.RECONNECTING
                 await reaper.try_transition(SessionState.FAILED, reason="reconnection_timeout")
@@ -663,7 +666,7 @@ async def _save_for_reconnect(app, sm, orchestrator, session_id, state_key, conn
             await redis.delete(state_key)
             logger.info("session_reaped", extra={"session_id": session_id})
         except Exception as e:
-            logger.error("session_reaper_failed", extra={"session_id": session_id, "error_type": type(e).__name__})
+            logger.error("session_reaper_failed", extra={"session_id": session_id, "error_type": str(e)})
 
     asyncio.create_task(reap_if_not_reconnected())
 
