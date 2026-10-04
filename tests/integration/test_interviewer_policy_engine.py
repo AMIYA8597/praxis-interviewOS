@@ -73,11 +73,11 @@ class MockGatewayRouter:
         return self.provider
 
     async def route(self, alias: str, context: Any, method_name: str, **kwargs):
-        if alias == "deep_reasoning" and method_name == "generate_structured":
+        if alias == "deep_reasoning" and method_name in ("generate_structured", "structured"):
             return await self.provider.generate_structured(**kwargs)
-        if alias == "fast_classify" and method_name == "generate":
+        if alias == "fast_classify" and method_name in ("generate", "text"):
             return await self.provider.generate(**kwargs)
-            
+
         raise NotImplementedError(f"Route {alias}.{method_name} not mocked")
 
 @pytest.mark.asyncio

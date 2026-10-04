@@ -10,20 +10,18 @@ from praxis_ai_gateway.router import RoutingContext, RoutedCall
 
 class MockRouter:
     async def route(self, task: str, context: RoutingContext, method_name: str, **kw):
+        import re as _re
         messages = kw.get("messages", [])
-        content = messages[0]["content"]
-        
-        # Extract transcript portion
-        try:
-            transcript = content.split("<transcript>")[1].split("</transcript>")[0].strip()
-        except IndexError:
-            transcript = content
-            
-        if "how would you" in transcript.lower():
+        # Transcript is in the user message (index 1), wrapped in UNTRUSTED_DOCUMENT
+        user_content = messages[1]["content"].lower() if len(messages) > 1 else ""
+        m = _re.search(r'<untrusted_document[^>]*>(.*?)</untrusted_document>', user_content, _re.DOTALL)
+        transcript = m.group(1).strip() if m else user_content
+
+        if "how would you" in transcript:
             result = CompletenessResult(is_complete=False)
         else:
             result = CompletenessResult(is_complete=True)
-            
+
         return RoutedCall(provider_name="mock", model="mock", result=result)
 
 async def test_genuine_mid_sentence():

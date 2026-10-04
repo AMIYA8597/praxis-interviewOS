@@ -19,18 +19,22 @@ class MockRedis:
 
 class MockRouter:
     async def route(self, task: str, context: RoutingContext, method_name: str, **kw):
-        if "timeout" in kw.get("messages", [{}])[0].get("content", ""):
-            # Simulate slow LLM
-            await asyncio.sleep(0.5)
-            
         messages = kw.get("messages", [])
-        content = messages[0]["content"].lower()
-        
-        # Extract transcript portion to avoid matching the prompt template itself
-        try:
-            transcript = content.split("<transcript>")[1].split("</transcript>")[0].strip()
-        except IndexError:
-            transcript = content
+
+        # Check all messages for a timeout signal
+        for msg in messages:
+            if "timeout" in msg.get("content", ""):
+                await asyncio.sleep(0.5)
+                break
+
+        # The actual transcript is in the user message (messages[1]), inside an
+        # <UNTRUSTED_DOCUMENT> block — not in the system prompt (messages[0]).
+        user_content = messages[1]["content"].lower() if len(messages) > 1 else ""
+
+        # Extract from UNTRUSTED_DOCUMENT wrapper
+        import re as _re
+        m = _re.search(r'<untrusted_document[^>]*>(.*?)</untrusted_document>', user_content, _re.DOTALL)
+        transcript = m.group(1).strip() if m else user_content
             
         # Test Cases mapping
         if "okay, great" in transcript or "mm-hmm" in transcript or "i see" in transcript or "got it" in transcript or "sure, makes sense" in transcript:
