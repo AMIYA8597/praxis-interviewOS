@@ -1,33 +1,41 @@
 import React, { useState } from 'react';
 import { CoachingHUD } from '../components/CoachingHUD';
+import { supabase } from '../lib/supabase';
 
 export function PracticeArenaPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionLive, setSessionLive] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-
   const [error, setError] = useState<string | null>(null);
 
-  // When "Start Practice" button clicked:
   const handleStartPractice = async () => {
     try {
       setError(null);
-      // 1. Create a session on backend
-      const apiUrl = (typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined) || 'http://localhost:8000';
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError('Not authenticated. Please sign in again.');
+        return;
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       const response = await fetch(`${apiUrl}/api/v1/sessions`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth-token')}` 
+          'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ target_job_id: selectedJobId })
+        body: JSON.stringify({ target_job_id: selectedJobId }),
       });
+
       if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail ?? `Server returned ${response.status}`);
       }
+
       const data = await response.json();
       if (!data.session_id) {
-         throw new Error("No session_id in response");
+        throw new Error('No session_id in response');
       }
       setSessionId(data.session_id);
       setSessionLive(true);
@@ -40,7 +48,7 @@ export function PracticeArenaPage() {
   return (
     <div className="h-screen bg-gray-900 p-4 flex flex-col">
       <h1 className="text-2xl font-bold text-gray-100 mb-4">Practice Arena</h1>
-      
+
       {sessionLive && sessionId ? (
         <CoachingHUD sessionId={sessionId} isLive={true} />
       ) : (

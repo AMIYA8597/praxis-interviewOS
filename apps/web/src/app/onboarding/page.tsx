@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { apiFetch, ApiError } from "@/lib/api/client";
 
 export default function OnboardingPage() {
   const [name, setName] = useState("");
@@ -12,20 +13,16 @@ export default function OnboardingPage() {
     e.preventDefault();
     setStatus("Uploading...");
 
-    let token = "mock-token";
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      const { data } = await supabase.auth.getSession();
-      token = data.session?.access_token || "";
+    const { data } = await supabase.auth.getSession();
+    if (!data.session?.access_token) {
+      setStatus("Error: Not authenticated. Please sign in again.");
+      return;
     }
 
     try {
       // 1. Update Profile
-      await fetch("http://localhost:8000/api/v1/candidates/me", {
+      await apiFetch("/candidates/me", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ name, summary: "Initial upload" }),
       });
 
@@ -33,27 +30,19 @@ export default function OnboardingPage() {
       if (file) {
         const formData = new FormData();
         formData.append("file", file);
-
-        const res = await fetch("http://localhost:8000/api/v1/resumes/upload", {
+        await apiFetch("/resumes/upload", {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
           body: formData,
         });
-        
-        if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.detail || "Failed to upload resume");
-        }
       }
 
       setStatus("Success! Resume processing started.");
       setTimeout(() => {
         window.location.href = "/";
       }, 1500);
-    } catch (err: any) {
-      setStatus(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof ApiError ? err.message : (err as Error).message;
+      setStatus(`Error: ${msg}`);
     }
   };
 
@@ -82,7 +71,7 @@ export default function OnboardingPage() {
             />
           </div>
           <button type="submit" className="p-3 bg-white text-black font-bold rounded mt-2">
-            Save & Continue
+            Save &amp; Continue
           </button>
         </form>
         {status && <p className="mt-4 text-center text-sm text-neutral-400">{status}</p>}
