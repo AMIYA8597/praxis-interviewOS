@@ -1,6 +1,11 @@
-import pytest
-from httpx import AsyncClient
-from backend.app.main import app
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _paths  # noqa: E402,F401  (must run before app imports)
+
+import pytest  # noqa: E402
+from backend.app.main import app  # noqa: E402
 
 from fastapi import Request, HTTPException
 from backend.app.dependencies import get_current_user, require_admin, get_db_session, get_current_candidate

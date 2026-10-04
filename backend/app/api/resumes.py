@@ -1,145 +1,116 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from typing import List
 import uuid
+from typing import List, Optional
 
-from backend.app.dependencies import get_db_session, get_current_candidate, get_redis
-from backend.app.schemas.resume import ResumeFactResponse, ResumeFactUpdate
-from redis.asyncio import Redis
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-router = APIRouter(tags=['resumes'])
+from backend.app.dependencies import get_arq_pool, get_current_candidate, get_db_session, get_object_storage
+from backend.app.schemas.common import COMMON_ERROR_RESPONSES, ErrorResponse, PaginatedResponse
+from backend.app.schemas.resume import (
+    ResumeFactResponse,
+    ResumeFactUpdate,
+    ResumeResponse,
+    ResumeStatusResponse,
+    ResumeUploadResponse,
+)
+from backend.app.services import resumes as service
+from packages.config.settings import settings
 
-ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+router = APIRouter(tags=["resumes"], responses=COMMON_ERROR_RESPONSES)
 
-@router.post("/resumes", status_code=status.HTTP_202_ACCEPTED)
+
+async def _upload(file, candidate, db, storage, arq_pool) -> ResumeUploadResponse:
+    return await service.upload_resume(
+        db, storage, arq_pool, candidate_id=candidate["id"], file=file, max_bytes=settings.MAX_UPLOAD_BYTES
+    )
+
+
+_UPLOAD_RESPONSES = {413: {"model": ErrorResponse}, 503: {"model": ErrorResponse}}
+
+
+@router.post(
+    "/resumes",
+    response_model=ResumeUploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=_UPLOAD_RESPONSES,
+)
 async def upload_resume(
-    request: Request,
     file: UploadFile = File(...),
     candidate: dict = Depends(get_current_candidate),
     db: AsyncSession = Depends(get_db_session),
-    redis: Redis = Depends(get_redis)
+    storage=Depends(get_object_storage),
+    arq_pool=Depends(get_arq_pool),
 ):
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-        
-    if file.content_type not in ALLOWED_MIMES:
-        raise HTTPException(status_code=400, detail="Unsupported file type")
-        
-    # Validation of magic bytes + size would happen here
-    # Store via get_object_storage
-    # Object storage and magic byte validation would be strictly implemented with the real backend.
-    
-    document_id = str(uuid.uuid4())
-    resume_id = str(uuid.uuid4())
-    
-    # 1. Insert documents row
-    doc_query = text("INSERT INTO documents (id, profile_id, filename, content_type, size_bytes, processing_status) VALUES (:id, :profile_id, :filename, :content_type, :size, 'uploading') RETURNING id")
-    await db.execute(doc_query, {"id": document_id, "profile_id": candidate.get("user_id", "")[:36], "filename": file.filename, "content_type": file.content_type, "size": 0})
-    
-    # 2. Insert resumes row
-    res_query = text("INSERT INTO resumes (id, candidate_id, document_id, is_active) VALUES (:id, :candidate_id, :document_id, true) RETURNING id")
-    await db.execute(res_query, {"id": resume_id, "candidate_id": candidate["id"], "document_id": document_id})
-    await db.commit()
-    
-    # 3. Enqueue the arq job
-    from opentelemetry.propagate import inject
-    trace_carrier = {}
-    inject(trace_carrier)
-    
-    if hasattr(request.app.state, 'arq_pool'):
-        await request.app.state.arq_pool.enqueue_job("process_resume", document_id, trace_carrier)
-    
-    return {"id": resume_id, "status": "uploading", "message": "Resume accepted for processing"}
+    """Accept a PDF/DOCX/TXT resume (<= MAX_UPLOAD_BYTES); parsing happens asynchronously."""
+    return await _upload(file, candidate, db, storage, arq_pool)
 
-@router.get("/resumes/{id}", response_model=dict)
+
+@router.post(
+    "/resumes/upload",
+    response_model=ResumeUploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=_UPLOAD_RESPONSES,
+    include_in_schema=False,
+)
+async def upload_resume_legacy(
+    file: UploadFile = File(...),
+    candidate: dict = Depends(get_current_candidate),
+    db: AsyncSession = Depends(get_db_session),
+    storage=Depends(get_object_storage),
+    arq_pool=Depends(get_arq_pool),
+):
+    """Alias used by the web onboarding page."""
+    return await _upload(file, candidate, db, storage, arq_pool)
+
+
+@router.get("/resumes", response_model=PaginatedResponse[ResumeResponse])
+async def list_resumes(
+    cursor: Optional[str] = Query(None, description="Opaque cursor from a previous page"),
+    limit: int = Query(20, ge=1, le=100),
+    candidate: dict = Depends(get_current_candidate),
+    db: AsyncSession = Depends(get_db_session),
+):
+    page = await service.list_resumes(db, candidate["id"], cursor, limit)
+    return {"items": page.items, "next_cursor": page.next_cursor}
+
+
+@router.get("/resumes/{id}", response_model=ResumeStatusResponse)
 async def get_resume_status(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Not found")
-        
-    query = text("""
-        SELECT r.id, d.processing_status 
-        FROM resumes r
-        JOIN documents d ON r.document_id = d.id
-        WHERE r.id = :id AND r.candidate_id = :candidate_id
-    """)
-    result = await db.execute(query, {"id": str(id), "candidate_id": candidate["id"]})
-    row = result.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found")
-        
-    return {"id": row[0], "processing_status": row[1]}
+    return await service.get_status(db, id, candidate["id"])
+
 
 @router.get("/resumes/{id}/facts", response_model=List[ResumeFactResponse])
 async def get_resume_facts(
     id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Not found")
-        
-    # Verify ownership
-    check = await db.execute(text("SELECT id FROM resumes WHERE id = :id AND candidate_id = :candidate_id"), {"id": str(id), "candidate_id": candidate["id"]})
-    if not check.fetchone():
-        raise HTTPException(status_code=404, detail="Not found")
-        
-    query = text("SELECT id, fact_type, content, verified_by_user FROM resume_facts WHERE resume_id = :id ORDER BY created_at ASC")
-    result = await db.execute(query, {"id": str(id)})
-    return [dict(r._mapping) for r in result.fetchall()]
+    return await service.list_facts(db, id, candidate["id"])
+
 
 @router.post("/resumes/{id}/facts/{fact_id}/confirm", response_model=ResumeFactResponse)
 async def confirm_resume_fact(
     id: uuid.UUID,
     fact_id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Not found")
-        
-    query = text("""
-        UPDATE resume_facts rf
-        SET verified_by_user = true
-        FROM resumes r
-        WHERE rf.resume_id = r.id AND rf.id = :fact_id AND r.id = :resume_id AND r.candidate_id = :candidate_id
-        RETURNING rf.id, rf.fact_type, rf.content, rf.verified_by_user
-    """)
-    result = await db.execute(query, {"fact_id": str(fact_id), "resume_id": str(id), "candidate_id": candidate["id"]})
-    row = result.fetchone()
-    await db.commit()
-    
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found")
-        
-    return dict(row._mapping)
+    return await service.confirm_fact(db, id, fact_id, candidate["id"])
+
 
 @router.post("/resumes/{id}/facts/{fact_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
 async def reject_resume_fact(
     id: uuid.UUID,
     fact_id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Not found")
-        
-    query = text("""
-        DELETE FROM resume_facts rf
-        USING resumes r
-        WHERE rf.resume_id = r.id AND rf.id = :fact_id AND r.id = :resume_id AND r.candidate_id = :candidate_id
-        RETURNING rf.id
-    """)
-    result = await db.execute(query, {"fact_id": str(fact_id), "resume_id": str(id), "candidate_id": candidate["id"]})
-    row = result.fetchone()
-    await db.commit()
-    
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found")
+    await service.reject_fact(db, id, fact_id, candidate["id"])
+
 
 @router.patch("/resumes/{id}/facts/{fact_id}", response_model=ResumeFactResponse)
 async def update_resume_fact(
@@ -147,29 +118,6 @@ async def update_resume_fact(
     fact_id: uuid.UUID,
     update_data: ResumeFactUpdate,
     candidate: dict = Depends(get_current_candidate),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Not found")
-        
-    query = text("""
-        UPDATE resume_facts rf
-        SET content = :content, verified_by_user = true
-        FROM resumes r
-        WHERE rf.resume_id = r.id AND rf.id = :fact_id AND r.id = :resume_id AND r.candidate_id = :candidate_id
-        RETURNING rf.id, rf.fact_type, rf.content, rf.verified_by_user
-    """)
-    result = await db.execute(query, {
-        "content": update_data.content,
-        "fact_id": str(fact_id),
-        "resume_id": str(id),
-        "candidate_id": candidate["id"]
-    })
-    row = result.fetchone()
-    await db.commit()
-    
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found")
-        
-    return dict(row._mapping)
-
+    return await service.update_fact(db, id, fact_id, candidate["id"], update_data.content)

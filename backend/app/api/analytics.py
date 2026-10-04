@@ -1,40 +1,41 @@
-from fastapi import APIRouter, Depends
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+
 from backend.app.dependencies import get_current_candidate, get_db_session
+from backend.app.schemas.common import COMMON_ERROR_RESPONSES
+from backend.app.services import analytics as service
 
-router = APIRouter(tags=["analytics"])
+router = APIRouter(tags=["analytics"], responses=COMMON_ERROR_RESPONSES)
 
-@router.get("/analytics/dashboard")
+
+class DashboardResponse(BaseModel):
+    interviews_completed: int
+    total_sessions: int
+    average_pace_wpm: float
+    filler_word_density: float
+    average_score: float
+    star_consistency: Optional[float] = None
+
+
+class ReportsResponse(BaseModel):
+    reports: List[Dict[str, Any]]
+
+
+@router.get("/analytics/dashboard", response_model=DashboardResponse)
 async def get_dashboard(
     candidate: dict = Depends(get_current_candidate),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    query = text("""
-        SELECT 
-            COUNT(DISTINCT st.session_id) as total_sessions,
-            AVG(CAST(st.metrics->>'wpm' AS FLOAT)) as average_wpm,
-            AVG(CAST(st.metrics->>'filler_rate' AS FLOAT)) as average_filler_rate,
-            AVG(st.score) as average_score
-        FROM session_turns st
-        JOIN practice_sessions ps ON st.session_id = ps.id
-        WHERE ps.candidate_id = :cid AND st.role = 'candidate'
-    """)
-    res = await db.execute(query, {"cid": candidate["id"]})
-    row = res.fetchone()
-    
-    return {
-        "interviews_completed": row.total_sessions or 0,
-        "average_pace_wpm": round(row.average_wpm or 0, 1),
-        "filler_word_density": round((row.average_filler_rate or 0) * 100, 1),
-        "average_score": round(row.average_score or 0, 1),
-        "star_consistency": 68.0 # Mocked for now since schema doesn't fully support STAR breakdown yet
-    }
+    return await service.dashboard(db, candidate["id"])
 
-@router.get("/analytics/reports")
+
+@router.get("/analytics/reports", response_model=ReportsResponse)
 async def get_reports(
+    limit: int = Query(20, ge=1, le=100),
     candidate: dict = Depends(get_current_candidate),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    # Could fetch historical sessions over time
-    return {"reports": []}
+    return await service.reports(db, candidate["id"], limit)

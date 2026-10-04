@@ -215,25 +215,25 @@ def upgrade() -> None:
     op.execute("ALTER TABLE projects ENABLE ROW LEVEL SECURITY;")
     op.execute('''
         CREATE POLICY "projects_select_own" ON projects FOR SELECT 
-        USING (current_setting('request.jwt.claim.sub', true) = (select user_id from candidate_profiles where id = projects.candidate_id));
+        USING (current_setting('request.jwt.claim.sub', true) = (select user_id::text from candidate_profiles where id = projects.candidate_id));
     ''')
     op.execute('''
         CREATE POLICY "projects_insert_own" ON projects FOR INSERT 
-        WITH CHECK (current_setting('request.jwt.claim.sub', true) = (select user_id from candidate_profiles where id = projects.candidate_id));
+        WITH CHECK (current_setting('request.jwt.claim.sub', true) = (select user_id::text from candidate_profiles where id = projects.candidate_id));
     ''')
 
     # experiences
     op.execute("ALTER TABLE experiences ENABLE ROW LEVEL SECURITY;")
     op.execute('''
         CREATE POLICY "experiences_select_own" ON experiences FOR SELECT 
-        USING (current_setting('request.jwt.claim.sub', true) = (select user_id from candidate_profiles where id = experiences.candidate_id));
+        USING (current_setting('request.jwt.claim.sub', true) = (select user_id::text from candidate_profiles where id = experiences.candidate_id));
     ''')
 
     # study_items
     op.execute("ALTER TABLE study_items ENABLE ROW LEVEL SECURITY;")
     op.execute('''
         CREATE POLICY "study_items_select_own" ON study_items FOR SELECT 
-        USING (current_setting('request.jwt.claim.sub', true) = (select user_id from candidate_profiles where id = study_items.candidate_id));
+        USING (current_setting('request.jwt.claim.sub', true) = (select user_id::text from candidate_profiles where id = study_items.candidate_id));
     ''')
 
 def downgrade() -> None:

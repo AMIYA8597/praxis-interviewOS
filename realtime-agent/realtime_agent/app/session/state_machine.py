@@ -35,17 +35,18 @@ TRANSITIONS: Dict[SessionState, Set[SessionState]] = {
     SessionState.PREFLIGHT: {SessionState.WARMING, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
     SessionState.WARMING: {SessionState.READY, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
     SessionState.READY: {SessionState.INTERVIEWER_TURN, SessionState.DEBRIEF, SessionState.PAUSED, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
-    SessionState.INTERVIEWER_TURN: {SessionState.YIELDING, SessionState.AWAITING_ANSWER, SessionState.DEGRADED_TTS, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
-    SessionState.AWAITING_ANSWER: {SessionState.CANDIDATE_TURN, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
-    SessionState.CANDIDATE_TURN: {SessionState.YIELDING, SessionState.TURN_END, SessionState.DEGRADED_STT, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
+    SessionState.INTERVIEWER_TURN: {SessionState.YIELDING, SessionState.AWAITING_ANSWER, SessionState.DEGRADED_TTS, SessionState.DEGRADED_LLM, SessionState.DEBRIEF, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
+    # TURN_END from AWAITING_ANSWER = "no answer" (silence timeout).
+    SessionState.AWAITING_ANSWER: {SessionState.CANDIDATE_TURN, SessionState.TURN_END, SessionState.PAUSED, SessionState.DEBRIEF, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
+    SessionState.CANDIDATE_TURN: {SessionState.YIELDING, SessionState.TURN_END, SessionState.DEGRADED_STT, SessionState.DEBRIEF, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
     SessionState.YIELDING: {SessionState.INTERVIEWER_TURN, SessionState.AWAITING_ANSWER, SessionState.TURN_END, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
-    SessionState.TURN_END: {SessionState.SCORING, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
+    SessionState.TURN_END: {SessionState.SCORING, SessionState.AWAITING_ANSWER, SessionState.PLANNING_NEXT, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
     SessionState.SCORING: {SessionState.PLANNING_NEXT, SessionState.DEGRADED_LLM, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
-    SessionState.PLANNING_NEXT: {SessionState.READY, SessionState.DEGRADED_LLM, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
-    
-    SessionState.DEGRADED_STT: {SessionState.TURN_END, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
-    SessionState.DEGRADED_LLM: {SessionState.READY, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
-    SessionState.DEGRADED_TTS: {SessionState.AWAITING_ANSWER, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
+    SessionState.PLANNING_NEXT: {SessionState.READY, SessionState.DEGRADED_LLM, SessionState.DEBRIEF, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
+
+    SessionState.DEGRADED_STT: {SessionState.TURN_END, SessionState.DEBRIEF, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
+    SessionState.DEGRADED_LLM: {SessionState.READY, SessionState.PLANNING_NEXT, SessionState.AWAITING_ANSWER, SessionState.DEBRIEF, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
+    SessionState.DEGRADED_TTS: {SessionState.AWAITING_ANSWER, SessionState.DEBRIEF, SessionState.FAILED, SessionState.STOPPED, SessionState.RECONNECTING},
     
     SessionState.RECONNECTING: {
         SessionState.PREFLIGHT, SessionState.WARMING, SessionState.READY, SessionState.INTERVIEWER_TURN,
@@ -54,7 +55,7 @@ TRANSITIONS: Dict[SessionState, Set[SessionState]] = {
         SessionState.FAILED, SessionState.STOPPED
     },
     
-    SessionState.PAUSED: {SessionState.READY, SessionState.STOPPED, SessionState.FAILED, SessionState.RECONNECTING},
+    SessionState.PAUSED: {SessionState.READY, SessionState.AWAITING_ANSWER, SessionState.DEBRIEF, SessionState.STOPPED, SessionState.FAILED, SessionState.RECONNECTING},
     
     SessionState.DEBRIEF: {SessionState.STOPPED, SessionState.FAILED, SessionState.RECONNECTING},
     

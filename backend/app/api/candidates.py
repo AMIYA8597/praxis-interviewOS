@@ -1,57 +1,53 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Response, status
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from backend.app.dependencies import get_db_session, get_current_candidate
-from backend.app.schemas.candidate import CandidateResponse, CandidateUpdate
 
-router = APIRouter(tags=['candidates'])
+from backend.app.dependencies import (
+    get_current_candidate,
+    get_current_user,
+    get_db_session,
+    get_redis,
+    invalidate_candidate_cache,
+)
+from backend.app.schemas.candidate import CandidateResponse, CandidateUpdate
+from backend.app.schemas.common import COMMON_ERROR_RESPONSES
+from backend.app.services import candidates as service
+
+router = APIRouter(tags=["candidates"], responses=COMMON_ERROR_RESPONSES)
+
 
 @router.get("/candidates/me", response_model=CandidateResponse)
 async def get_me(
     candidate: dict = Depends(get_current_candidate),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-        
-    query = text("SELECT id, profile_id, full_name, headline, target_roles, preferred_language, speaking_style, created_at, updated_at FROM candidates WHERE id = :id")
-    result = await db.execute(query, {"id": candidate["id"]})
-    row = result.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-        
-    return dict(row._mapping)
+    return await service.get_profile(db, candidate["id"])
+
 
 @router.patch("/candidates/me", response_model=CandidateResponse)
 async def update_me(
     update_data: CandidateUpdate,
     candidate: dict = Depends(get_current_candidate),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-        
-    update_dict = update_data.model_dump(exclude_unset=True)
-    if not update_dict:
-        return await get_me(candidate, db)
-        
-    set_clauses = []
-    values = {"id": candidate["id"]}
-    
-    for key, value in update_dict.items():
-        set_clauses.append(f"{key} = :{key}")
-        values[key] = value
-        
-    set_clauses.append("updated_at = NOW()")
-    
-    query_str = f"UPDATE candidates SET {', '.join(set_clauses)} WHERE id = :id RETURNING id, profile_id, full_name, headline, target_roles, preferred_language, speaking_style, created_at, updated_at"
-    
-    result = await db.execute(text(query_str), values)
-    row = result.fetchone()
-    await db.commit()
-    
-    if not row:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-        
-    return dict(row._mapping)
+    return await service.update_profile(db, candidate["id"], update_data)
 
+
+@router.put(
+    "/candidates/me",
+    response_model=CandidateResponse,
+    responses={201: {"model": CandidateResponse}},
+)
+async def upsert_me(
+    update_data: CandidateUpdate,
+    response: Response,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+    redis: Redis = Depends(get_redis),
+):
+    """Onboarding: create the caller's candidate profile, or update it if it exists."""
+    candidate, created = await service.upsert_profile(db, str(user["sub"]), update_data)
+    if created:
+        response.status_code = status.HTTP_201_CREATED
+        await invalidate_candidate_cache(redis, str(user["sub"]))
+    return candidate

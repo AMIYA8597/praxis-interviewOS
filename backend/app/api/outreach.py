@@ -1,31 +1,50 @@
-﻿from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from backend.app.dependencies import get_current_candidate, get_ai_gateway
-from backend.app.services.outreach import generate_cold_outreach
-from praxis_ai_gateway.router import RoutingContext
+from typing import Optional
 
-router = APIRouter(tags=["outreach"])
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
-class CampaignCreate(BaseModel):
-    company: str
-    detail: str
+from backend.app.dependencies import get_ai_gateway, get_current_candidate, get_db_session
+from backend.app.schemas.application import (
+    OutreachDraftRequest,
+    OutreachDraftResponse,
+    OutreachGenerateResponse,
+)
+from backend.app.schemas.common import COMMON_ERROR_RESPONSES, PaginatedResponse
+from backend.app.services import outreach as service
 
-@router.get("/outreach/campaigns")
-async def list_campaigns(candidate: dict = Depends(get_current_candidate)):
-    return {"campaigns": []}
+router = APIRouter(tags=["outreach"], responses=COMMON_ERROR_RESPONSES)
 
-@router.post("/outreach/draft")
-async def draft_outreach(
-    req: CampaignCreate, 
+
+class CampaignsPage(PaginatedResponse[OutreachDraftResponse]):
+    # Legacy key kept alongside `items`.
+    campaigns: list[OutreachDraftResponse] = []
+
+
+@router.get("/outreach/campaigns", response_model=CampaignsPage)
+async def list_campaigns(
+    cursor: Optional[str] = Query(None, description="Opaque cursor from a previous page"),
+    limit: int = Query(20, ge=1, le=100),
     candidate: dict = Depends(get_current_candidate),
-    gateway = Depends(get_ai_gateway)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    ctx = RoutingContext(user_id=candidate["profile_id"])
-    draft = await generate_cold_outreach(
-        candidate_id=candidate["id"],
+    page = await service.list_drafts(db, candidate["id"], cursor, limit)
+    return {"items": page.items, "campaigns": page.items, "next_cursor": page.next_cursor}
+
+
+@router.post("/outreach/draft", response_model=OutreachGenerateResponse)
+async def draft_outreach(
+    req: OutreachDraftRequest,
+    candidate: dict = Depends(get_current_candidate),
+    db: AsyncSession = Depends(get_db_session),
+    gateway=Depends(get_ai_gateway),
+):
+    draft, saved_id = await service.draft_outreach(
+        db,
+        gateway,
+        candidate,
         company=req.company,
         detail=req.detail,
-        gateway_router=gateway,
-        routing_ctx=ctx
+        application_id=req.application_id,
+        recipient_name=req.recipient_name,
     )
-    return {"status": "success", "draft": draft}
+    return {"status": "success", "draft": draft, "saved_draft_id": saved_id}

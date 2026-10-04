@@ -1,13 +1,11 @@
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from fastapi.testclient import TestClient
 
 try:
     from realtime_agent.app.main import create_app
 except ModuleNotFoundError:
     create_app = None  # type: ignore
-from sqlalchemy import text
 
 @pytest.fixture
 def client():

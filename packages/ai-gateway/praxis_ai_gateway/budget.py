@@ -19,35 +19,33 @@ class BudgetGuard:
         self.default_session_cap = 1.00
 
     async def check_consent(self, user_id: str):
-        # In a real system, user_settings table would have paid_provider_acknowledged
-        # For our spec, we also check usage_events for any prior non-free row
-        query = text("""
-            SELECT EXISTS(
-                SELECT 1 FROM usage_events 
-                WHERE user_id = :uid AND was_free_tier = false
-            )
-        """)
-        result = await self.db.execute(query, {"uid": user_id})
-        has_prior_spend = result.scalar()
-        
-        if not has_prior_spend:
-            # We would check user_settings here. 
-            # If not explicitly acknowledged, we must block.
-            # Assuming not acknowledged for safety, unless the schema has the column.
-            # We'll check profiles table (user_settings equivalent)
-            settings_query = text("""
-                SELECT 1 FROM profiles 
-                WHERE id = :uid AND paid_provider_acknowledged = true
-            """)
-            try:
-                res2 = await self.db.execute(settings_query, {"uid": user_id})
-                if not res2.scalar():
-                    raise ConsentRequiredError("First use of a paid provider requires explicit consent.")
-            except Exception as e:
-                # If column doesn't exist, fallback to error
-                if "paid_provider_acknowledged" in str(e):
-                    raise ConsentRequiredError("First use of a paid provider requires explicit consent.")
-                raise
+        """Paid providers require prior paid usage or explicit acknowledgement.
+
+        Fails closed: if consent cannot be established (no DB, unknown user,
+        missing column) the paid provider is skipped and the router falls
+        back to the next (free) candidate.
+        """
+        profile_id = str(user_id)
+        if self.db is None:
+            raise ConsentRequiredError("First use of a paid provider requires explicit consent.")
+        try:
+            result = await self.db.execute(text("""
+                SELECT EXISTS(
+                    SELECT 1 FROM usage_events
+                    WHERE profile_id = CAST(:uid AS uuid) AND was_free_tier = false
+                )
+            """), {"uid": profile_id})
+            if result.scalar():
+                return
+            res2 = await self.db.execute(text("""
+                SELECT 1 FROM profiles
+                WHERE id = CAST(:uid AS uuid) AND paid_provider_acknowledged = true
+            """), {"uid": profile_id})
+            if res2.scalar():
+                return
+        except Exception:
+            pass
+        raise ConsentRequiredError("First use of a paid provider requires explicit consent.")
 
     async def check_and_reserve(self, user_id: str, session_id: Optional[str], estimated_cost: float):
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")

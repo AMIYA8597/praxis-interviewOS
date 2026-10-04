@@ -1,20 +1,9 @@
-import logging
-from uuid import UUID
-from typing import Dict, Any
+"""Backwards-compatible entry point; the real pipeline lives in worker_tasks.process_resume."""
+from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
+from backend.app.worker_tasks import process_resume
 
-async def process_document(ctx: Dict[str, Any], document_id: UUID, file_url: str, candidate_id: UUID):
-    """
-    1. Download file from storage
-    2. Extract text (PDF/DOCX)
-    3. Validate (virus scan if available)
-    4. Store in document_chunks table
-    5. Enqueue embeddings job
-    6. Update document status
-    """
-    logger.info(f"Processing document {document_id}")
-    # Enqueue next stage
-    redis = ctx.get('redis')
-    if redis:
-        await redis.enqueue_job('generate_embeddings', document_id)
+
+async def process_document(ctx: Dict[str, Any], document_id, *args, trace_carrier: dict = None, **kwargs):
+    """Parse -> chunk -> embed -> store -> extract for one document (delegates to process_resume)."""
+    return await process_resume(ctx, str(document_id), trace_carrier=trace_carrier)

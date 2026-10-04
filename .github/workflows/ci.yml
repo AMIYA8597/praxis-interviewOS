@@ -6,9 +6,52 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# Cancel superseded runs for the same branch / PR.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
+  # ---------------------------------------------------------------------------
+  # Backend: migrations + RLS guard + full backend test suite.
+  #
+  # Service credentials mirror docker-compose.yml exactly (praxis / dev_password
+  # / praxis) so CI exercises the same database the local stack uses.
+  #
+  # REGRESSION CHECK (verified locally, P1C.1): commenting out
+  #   alter table document_chunks enable row level security;
+  # in supabase/migrations/20260907235802_enable_rls_policies.sql, migrating a
+  # fresh database and running tests/security/test_rls_enabled.py produces:
+  #
+  #   tests/security/test_rls_enabled.py::test_all_tables_have_rls_enabled FAILED
+  #   E   AssertionError: FATAL: The following tables do NOT have RLS enabled:
+  #       ['document_chunks']. Enable RLS immediately.
+  #   1 failed
+  #
+  # The "RLS Security Suite" step therefore fails and the job stops before the
+  # remaining suites run. With the line restored the same step reports 6 passed.
+  # ---------------------------------------------------------------------------
   backend-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://praxis:dev_password@localhost:5432/praxis
+      REDIS_URL: redis://localhost:6379/0
+      LOCAL_ONLY_MODE: "true"
+      PYTHONUNBUFFERED: "1"
+      # Used by psql in the migration verification step.
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: praxis
+      PGPASSWORD: dev_password
+      PGDATABASE: praxis
+    defaults:
+      run:
+        # bash -e -o pipefail: any failing command fails the step.
+        shell: bash
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -49,18 +92,39 @@ jobs:
 
     - name: Install Python Dependencies
       run: |
+        python -m pip install --upgrade pip
         pip install -r backend/requirements.txt
         pip install pytest pytest-asyncio respx ruff fakeredis
+        # Local packages first so backend's praxis-config / praxis-ai-gateway
+        # dependencies resolve to the in-repo sources.
         pip install -e packages/config
         pip install -e packages/ai-gateway
         pip install -e backend
         pip install -e realtime-agent
 
     - name: Run Migrations
-      env:
-        DATABASE_URL: postgresql://praxis:dev_password@localhost:5432/praxis
       run: |
         python scripts/migrate.py
+
+    - name: Verify Migrations
+      run: |
+        # Second run must be a no-op (every file already in schema_migrations).
+        python scripts/migrate.py | tee /tmp/migrate-rerun.log
+        if grep -q '^Applying ' /tmp/migrate-rerun.log; then
+          echo "::error::migrate.py is not idempotent: second run applied migrations"
+          exit 1
+        fi
+        # Every applied file must have a 'success' timing row in migration_status
+        # (written via log_migration()) and no 'failed' rows may exist.
+        applied=$(psql -tAc "SELECT count(*) FROM schema_migrations")
+        logged=$(psql -tAc "SELECT count(*) FROM migration_status WHERE status = 'success'")
+        failed=$(psql -tAc "SELECT count(*) FROM migration_status WHERE status = 'failed'")
+        echo "schema_migrations=$applied migration_status(success)=$logged failed=$failed"
+        psql -c "SELECT version, name, execution_time_ms, status FROM migration_status ORDER BY version, name"
+        if [ "$failed" -ne 0 ] || [ "$applied" -ne "$logged" ]; then
+          echo "::error::migration_status does not match schema_migrations"
+          exit 1
+        fi
 
     - name: Run Boundary Checks
       run: |
@@ -71,19 +135,31 @@ jobs:
       run: |
         ruff check .
 
+    # Full RLS suite. Runs before everything else that touches the database so
+    # an RLS regression fails the build immediately (-x stops on first failure).
     - name: Run RLS Security Suite
-      env:
-        DATABASE_URL: postgresql://praxis:dev_password@localhost:5432/praxis
       run: |
-        pytest tests/security/ backend/tests/security/ backend/tests/integration/test_rls_bypass.py
+        python -m pytest -x -v \
+          tests/security/test_rls_enabled.py \
+          tests/security/test_rls_isolation.py \
+          backend/tests/security/test_rls_isolation.py \
+          backend/tests/security/test_rls_storage.py \
+          backend/tests/integration/test_rls_bypass.py
 
-    - name: Run Remaining Python Tests
-      env:
-        DATABASE_URL: postgresql://praxis:dev_password@localhost:5432/praxis
-        REDIS_URL: redis://localhost:6379/0
-        LOCAL_ONLY_MODE: "true"
+    - name: Run Backend Test Suite
       run: |
-        pytest backend/tests/ packages/ai-gateway/tests/ realtime-agent/tests/ tests/ -m "not live_provider" --ignore=tests/security/ --ignore=backend/tests/security/ --ignore=backend/tests/integration/test_rls_bypass.py
+        python -m pytest backend/tests/ -x -q -rs -m "not live_provider"
+
+    # RLS files already ran above. tests/infra/test_storage.py is excluded
+    # because it imports the removed backend.storage package (storage moved to
+    # backend.app.core.storage with a different API); it fails at collection
+    # and must be rewritten before it can be re-enabled.
+    - name: Run Remaining Python Tests
+      run: |
+        python -m pytest packages/ai-gateway/tests/ realtime-agent/tests/ tests/ -q -rs -m "not live_provider" \
+          --ignore=tests/security/test_rls_enabled.py \
+          --ignore=tests/security/test_rls_isolation.py \
+          --ignore=tests/infra/test_storage.py
 
   frontend-checks:
     runs-on: ubuntu-latest

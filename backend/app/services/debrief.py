@@ -1,4 +1,5 @@
 import logging
+import uuid as _uuid
 from typing import Dict, List
 from pydantic import BaseModel
 
@@ -23,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from backend.app.db.models import TurnMetric, TurnScore, SessionTurn
 
-async def generate_session_debrief(session_id: str, db: AsyncSession, gateway: GatewayRouter) -> Dict:
+async def generate_session_debrief(session_id: str, db: AsyncSession, gateway: GatewayRouter, user_id: str = "system") -> Dict:
     """
     Generates the Post-Session Debrief.
     Aggregates metrics and delegates the final summary to the reasoning alias
@@ -32,14 +33,14 @@ async def generate_session_debrief(session_id: str, db: AsyncSession, gateway: G
     NOTE: In a realtime session, realtime_agent/app/interview/debrief.py is primarily used. 
     This is an API-level fallback to regenerate a debrief from persisted DB tables if needed.
     """
-    logger.info(f"Generating debrief for session {session_id}")
+    logger.info("debrief_generation_started", extra={"session_id": str(session_id)})
     
     # Query real Postgres tables
-    stmt_metrics = select(TurnMetric).join(SessionTurn).where(SessionTurn.session_id == session_id)
+    stmt_metrics = select(TurnMetric).join(SessionTurn).where(SessionTurn.session_id == _uuid.UUID(str(session_id)))
     res_metrics = await db.execute(stmt_metrics)
     turn_metrics = res_metrics.scalars().all()
     
-    stmt_scores = select(TurnScore).join(SessionTurn).where(SessionTurn.session_id == session_id)
+    stmt_scores = select(TurnScore).join(SessionTurn).where(SessionTurn.session_id == _uuid.UUID(str(session_id)))
     res_scores = await db.execute(stmt_scores)
     turn_scores = res_scores.scalars().all()
     
@@ -69,7 +70,7 @@ async def generate_session_debrief(session_id: str, db: AsyncSession, gateway: G
     ]
     
     try:
-        resp = await gateway.route("deep_reasoning", RoutingContext(user_id="system"), "structured", messages=messages, schema=SessionDebrief)
+        resp = await gateway.route("deep_reasoning", RoutingContext(user_id=user_id, session_id=str(session_id)), "structured", messages=messages, schema=SessionDebrief)
         debrief: SessionDebrief = resp.result
         
         summary_parts = debrief.strengths + debrief.weaknesses
@@ -83,7 +84,7 @@ async def generate_session_debrief(session_id: str, db: AsyncSession, gateway: G
             "jd_coverage": debrief.jd_coverage,
         }
     except Exception as e:
-        logger.error(f"Failed to generate debrief: {e}")
+        logger.error("debrief_generation_failed", extra={"session_id": str(session_id), "error_type": type(e).__name__})
         return {
             "session_id": session_id,
             "summary": "Failed to generate AI debrief summary.",
@@ -97,3 +98,33 @@ async def generate_session_debrief(session_id: str, db: AsyncSession, gateway: G
             "flagged_claims": [],
             "jd_coverage": {},
         }
+
+
+async def persist_session_debrief(db: AsyncSession, session_id: str, result: Dict) -> None:
+    """Idempotent upsert of a generated debrief into session_debriefs."""
+    import json
+    from sqlalchemy import text
+
+    await db.execute(
+        text("""
+            INSERT INTO session_debriefs (session_id, headline_metrics, strengths, weaknesses, flagged_claims,
+                                          jd_coverage, generated_at)
+            VALUES (CAST(:sid AS uuid), CAST(:hm AS jsonb), :strengths, :weaknesses, CAST(:fc AS jsonb),
+                    CAST(:jd AS jsonb), now())
+            ON CONFLICT (session_id) DO UPDATE SET
+                headline_metrics = EXCLUDED.headline_metrics,
+                strengths = EXCLUDED.strengths,
+                weaknesses = EXCLUDED.weaknesses,
+                flagged_claims = EXCLUDED.flagged_claims,
+                jd_coverage = EXCLUDED.jd_coverage,
+                generated_at = EXCLUDED.generated_at
+        """),
+        {
+            "sid": str(session_id),
+            "hm": json.dumps(result.get("headline_metrics") or {}),
+            "strengths": list(result.get("strengths") or []),
+            "weaknesses": list(result.get("weaknesses") or []),
+            "fc": json.dumps(result.get("flagged_claims") or []),
+            "jd": json.dumps(result.get("jd_coverage") or {}),
+        },
+    )
