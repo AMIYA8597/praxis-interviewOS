@@ -136,7 +136,7 @@ async def test_on_candidate_turn_end(patch_scoring, test_db):
     orchestrator.end_session_and_debrief.assert_not_called()
     
     # Check DB persistence
-    turn_res = await test_db.execute(text("SELECT id, text_content FROM session_turns WHERE session_id = :sid"), {"sid": session_id})
+    turn_res = await test_db.execute(text("SELECT id, text FROM session_turns WHERE session_id = :sid"), {"sid": session_id})
     turn_row = turn_res.fetchone()
     assert turn_row is not None, "session_turns row was not created"
     

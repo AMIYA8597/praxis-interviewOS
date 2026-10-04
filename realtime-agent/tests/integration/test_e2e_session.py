@@ -34,7 +34,7 @@ async def setup_db():
         await conn.execute(text("CREATE TABLE practice_sessions (id TEXT, candidate_id TEXT, job_id TEXT, status TEXT, ended_at TEXT)"))
         await conn.execute(text("CREATE TABLE session_debriefs (id TEXT, session_id TEXT, headline_metrics TEXT, strengths TEXT, weaknesses TEXT, flagged_claims TEXT, jd_coverage TEXT, generated_at TEXT)"))
         await conn.execute(text("CREATE TABLE transcript_segments (session_id TEXT, role TEXT, text TEXT, start_ms REAL, end_ms REAL, confidence REAL, source TEXT)"))
-        await conn.execute(text("CREATE TABLE session_turns (id TEXT, session_id TEXT, turn_index INT, speaker TEXT, text_content TEXT)"))
+        await conn.execute(text("CREATE TABLE session_turns (id TEXT, session_id TEXT, turn_index INT, speaker TEXT, text TEXT)"))
         await conn.execute(text("CREATE TABLE turn_scores (id TEXT, turn_id TEXT, overall REAL, rationale TEXT, relevance REAL, correctness REAL, structure REAL, grounding REAL, specificity REAL, conciseness REAL)"))
         await conn.execute(text("CREATE TABLE session_claims (id TEXT, session_id TEXT, turn_id TEXT, claim_text TEXT, supported BOOLEAN)"))
         

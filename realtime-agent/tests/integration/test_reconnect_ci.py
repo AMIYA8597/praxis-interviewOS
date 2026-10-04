@@ -87,6 +87,7 @@ async def realtime_server():
             pass
 
 @pytest.mark.asyncio
+@pytest.mark.live_provider
 async def test_reconnect_hard_tcp_drop(realtime_server):
     db_url = os.environ["DATABASE_URL"]
     engine = create_async_engine(db_url)

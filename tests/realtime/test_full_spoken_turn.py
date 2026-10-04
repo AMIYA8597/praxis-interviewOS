@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import logging
+import pytest
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'ai-gateway'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -23,6 +24,7 @@ async def text_generator():
     await asyncio.sleep(0.1)
     yield "Could you explain the architecture of the distributed system you built?"
 
+@pytest.mark.live_provider
 async def test_full_turn():
     tts = PiperTTSAdapter(voice_model="models/en_US-lessac-low.onnx")
     token = CancellationToken()

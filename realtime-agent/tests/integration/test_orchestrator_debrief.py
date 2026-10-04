@@ -54,14 +54,14 @@ async def test_end_session_and_debrief(patch_gateway, test_db):
     # 1. Seed the Database
     # Insert candidate for FKs (if needed, though sqlite might not enforce FKs by default, but it's safe)
     # We will just insert directly
-    query = text("INSERT INTO candidate_profiles (id, user_id, name) VALUES (:cid, :uid, 'Test User')")
+    query = text("INSERT INTO candidates (id, profile_id, full_name) VALUES (:cid, :uid, 'Test Candidate')")
     await test_db.execute(query, {"cid": candidate_id, "uid": str(uuid.uuid4())})
 
     query = text("INSERT INTO practice_sessions (id, candidate_id) VALUES (:id, :cid)")
     await test_db.execute(query, {"id": session_id, "cid": candidate_id})
     
     turn_id = str(uuid.uuid4())
-    query = text("INSERT INTO session_turns (id, session_id, turn_index, speaker, text_content) VALUES (:id, :sid, 1, 'candidate', 'I used Python')")
+    query = text("INSERT INTO session_turns (id, session_id, turn_index, speaker, text) VALUES (:id, :sid, 1, 'candidate', 'I used Python')")
     await test_db.execute(query, {"id": turn_id, "sid": session_id})
     
     query = text("INSERT INTO turn_scores (id, turn_id, overall, rationale) VALUES (:id, :tid, 0.9, 'Good')")

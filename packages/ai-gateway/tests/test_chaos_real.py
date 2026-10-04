@@ -1,4 +1,5 @@
 import pytest
+import uuid
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,7 +57,7 @@ async def test_mid_stream_fallback():
     
     router = GatewayRouter(registry=registry, providers={}, redis=redis, db=db)
     
-    ctx = RoutingContext(user_id="user1")
+    ctx = RoutingContext(user_id=str(uuid.uuid4()))
     call = await router.route("test_task", ctx, "stream")
     
     assert call.provider_name == "router_stream"
@@ -111,7 +112,7 @@ async def test_structured_malformed_fallback():
     db.commit = AsyncMock()
     
     router = GatewayRouter(registry=registry, providers={}, redis=redis, db=db)
-    ctx = RoutingContext(user_id="user1")
+    ctx = RoutingContext(user_id=str(uuid.uuid4()))
     
     call = await router.route("test_task", ctx, "structured")
     
