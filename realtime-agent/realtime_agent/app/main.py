@@ -3,7 +3,7 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy import text
 from redis.asyncio import Redis
 
@@ -151,34 +151,7 @@ def create_app() -> FastAPI:
         from realtime_agent.app.audio.vad import VoiceActivityDetector
         vad = VoiceActivityDetector()
         
-        # Initialize STT
-        from praxis_ai_gateway.transcription.router import select_transcriber
-        import os
-        settings = {
-            "LOCAL_ONLY_MODE": os.environ.get("LOCAL_ONLY_MODE", "true").lower()
-        }
-        transcriber = select_transcriber({}, settings, enqueue_event)
-        await transcriber.connect({"language": None})
-        
-        # Setup DB session for logging
-        db = websocket.app.state.db_session_factory()
-        
         outbound_queue = asyncio.Queue(maxsize=100)
-        
-        async def send_worker():
-            while True:
-                msg = await outbound_queue.get()
-                try:
-                    if isinstance(msg, bytes):
-                        await websocket.send_bytes(msg)
-                    else:
-                        await websocket.send_text(msg.model_dump_json())
-                except Exception as e:
-                    logger.error(f"Send worker failed: {e}")
-                    break
-                outbound_queue.task_done()
-                
-        sender_task = asyncio.create_task(send_worker())
         
         sequence = 1
         if cached_state:
@@ -195,6 +168,33 @@ def create_app() -> FastAPI:
                     asyncio.create_task(outbound_queue.put(event))
                 else:
                     logger.warning("Outbound queue full, dropping non-critical event")
+                    
+        # Initialize STT
+        from praxis_ai_gateway.transcription.router import select_transcriber
+        import os
+        settings = {
+            "LOCAL_ONLY_MODE": os.environ.get("LOCAL_ONLY_MODE", "true").lower()
+        }
+        transcriber = select_transcriber({}, settings, enqueue_event)
+        await transcriber.connect({"language": None})
+        
+        # Setup DB session for logging
+        db = websocket.app.state.db_session_factory()
+        
+        async def send_worker():
+            while True:
+                msg = await outbound_queue.get()
+                try:
+                    if isinstance(msg, bytes):
+                        await websocket.send_bytes(msg)
+                    else:
+                        await websocket.send_text(msg.model_dump_json())
+                except Exception as e:
+                    logger.error(f"Send worker failed: {e}")
+                    break
+                outbound_queue.task_done()
+                
+        sender_task = asyncio.create_task(send_worker())
                     
         # Initialize Manager
         from realtime_agent.app.session.manager import SessionManager

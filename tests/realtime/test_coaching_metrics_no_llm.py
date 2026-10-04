@@ -1,12 +1,10 @@
 import asyncio
 import os
 import sys
-import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'ai-gateway'))
 
-import pytest
 from realtime_agent.app.coaching.accumulator import CoachingMetricsAccumulator
 from realtime_agent.app.protocol import Envelope
 

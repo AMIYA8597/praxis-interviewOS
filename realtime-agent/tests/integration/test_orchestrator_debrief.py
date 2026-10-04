@@ -1,6 +1,5 @@
 import pytest
 import pytest_asyncio
-import asyncio
 import uuid
 import json
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -13,8 +12,6 @@ from realtime_agent.app.session.orchestrator import SessionOrchestrator
 from realtime_agent.app.session.manager import SessionManager
 from realtime_agent.app.session.state_machine import SessionState
 from realtime_agent.app.interview.policy import InterviewSession
-from realtime_agent.app.scoring.models import AnswerScore
-from realtime_agent.app.scoring.claims import SessionClaim
 from realtime_agent.app.interview.debrief import SessionDebrief, HeadlineMetrics
 from praxis_ai_gateway.router import GatewayRouter, RoutingContext
 

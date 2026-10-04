@@ -1,6 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 from uuid import UUID
 from backend.app.dependencies import get_db_session
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -1,12 +1,11 @@
 import pytest
 import asyncio
 import time
-from typing import AsyncIterator, Any
+from typing import AsyncIterator
 from unittest.mock import AsyncMock
 
-from praxis_ai_gateway.base import LLMProvider, LLMMessage, LLMDelta, LLMResponse, ProviderCapabilities
+from praxis_ai_gateway.base import LLMProvider, LLMMessage, LLMDelta, ProviderCapabilities
 from praxis_ai_gateway.router import GatewayRouter, RoutingContext
-from praxis_ai_gateway.registry import ModelRegistry
 from realtime_agent.app.interview.generation import SessionGenerationManager
 from realtime_agent.app.interview.barge_in import BargeInController
 from realtime_agent.app.session.state_machine import StateMachine, SessionState

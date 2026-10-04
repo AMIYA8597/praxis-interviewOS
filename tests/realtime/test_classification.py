@@ -6,10 +6,8 @@ import time
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'ai-gateway'))
 
-import pytest
-from pydantic import BaseModel
 from praxis_ai_gateway.classification import FastClassifier, QuestionClassification
-from praxis_ai_gateway.router import GatewayRouter, RoutingContext, RoutedCall
+from praxis_ai_gateway.router import RoutingContext, RoutedCall
 
 class MockRedis:
     def __init__(self):

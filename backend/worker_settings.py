@@ -56,7 +56,7 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 import arq
 
 async def on_startup(ctx):
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+    from sqlalchemy.ext.asyncio import create_async_engine
     import os
     db_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/praxis")
     ctx['db_engine'] = create_async_engine(db_url)

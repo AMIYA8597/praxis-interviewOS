@@ -1,12 +1,12 @@
 import pytest
 import fakeredis.aioredis
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock
 import asyncio
 import yaml
 
 from praxis_ai_gateway.registry import ModelRegistry
-from praxis_ai_gateway.router import GatewayRouter, RoutingContext, RoutedCall, AllProvidersUnavailableError
-from praxis_ai_gateway.base import LLMMessage, LLMResponse, ProviderCapabilities
+from praxis_ai_gateway.router import GatewayRouter, RoutingContext
+from praxis_ai_gateway.base import LLMResponse, ProviderCapabilities
 from praxis_ai_gateway.errors import ProviderServerError
 
 class FakeProvider:

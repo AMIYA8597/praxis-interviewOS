@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, Request
-from typing import List, Dict, Any
 from pydantic import BaseModel
 from backend.app.dependencies import get_current_candidate, get_ai_gateway
 

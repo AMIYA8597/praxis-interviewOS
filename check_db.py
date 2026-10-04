@@ -1,6 +1,7 @@
-﻿import asyncio, asyncpg
+import asyncio, asyncpg
 async def main():
-    conn = await asyncpg.connect('postgresql://postgres:postgres@localhost:5432/postgres')
+    from packages.config.settings import settings
+    conn = await asyncpg.connect(settings.DATABASE_URL)
     rows = await conn.fetch('SELECT datname FROM pg_database;')
     for r in rows:
         print(r['datname'])

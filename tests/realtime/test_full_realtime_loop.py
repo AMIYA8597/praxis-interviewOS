@@ -3,7 +3,6 @@ print("Starting script...")
 import os
 os.environ["LOCAL_STT_MODEL"] = "tiny"
 import sys
-import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'ai-gateway'))
@@ -73,7 +72,6 @@ async def test_full_loop():
     
     # 4. Transcribe candidate's full answer
     print("\n[STT] Processing candidate audio frame...")
-    import wave
     import numpy as np
     
     # Synthesize dummy sine wave audio for STT to consume

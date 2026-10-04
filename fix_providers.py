@@ -1,4 +1,3 @@
-import os
 
 with open('apps/web/src/app/(dashboard)/settings/providers/page.tsx', 'w', encoding='utf-8') as f:
     f.write('''"use client";

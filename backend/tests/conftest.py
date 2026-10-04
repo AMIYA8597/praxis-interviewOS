@@ -71,3 +71,24 @@ def mock_auth_token_admin():
 @pytest.fixture
 def auth_headers(mock_auth_token):
     return {"Authorization": f"Bearer {mock_auth_token}"}
+
+@pytest.fixture
+async def db_engine():
+    """Async DB engine for integration tests that need a real database."""
+    import os
+    from sqlalchemy.ext.asyncio import create_async_engine
+    raw_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://praxis:dev_password@localhost:5432/praxis")
+    if raw_url.startswith("postgresql://") and "asyncpg" not in raw_url:
+        db_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    else:
+        db_url = raw_url
+    engine = create_async_engine(db_url, echo=False)
+    try:
+        async with engine.connect() as conn:
+            pass  # verify connectivity
+    except Exception as e:
+        pytest.skip(f"Database not accessible: {e}")
+    try:
+        yield engine
+    finally:
+        await engine.dispose()

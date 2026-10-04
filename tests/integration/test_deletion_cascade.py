@@ -1,17 +1,8 @@
-import os
-import psycopg2
-import pytest
 import uuid
 import json
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://praxis@localhost:5432/praxis")
+from packages.config.settings import settings
 
-@pytest.fixture
-def db_conn():
-    conn = psycopg2.connect(DATABASE_URL)
-    conn.autocommit = True
-    yield conn
-    conn.close()
 
 def test_full_deletion_cascade(db_conn):
     cur = db_conn.cursor()
@@ -122,7 +113,7 @@ def test_real_deletion_job(db_conn):
     from backend.app.worker_tasks import delete_candidate_account_job
     
     async def run_test():
-        engine = create_async_engine(DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://'))
+        engine = create_async_engine(settings.DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://'))
         ctx = {'db_engine': engine}
         
         user_id = str(uuid.uuid4())

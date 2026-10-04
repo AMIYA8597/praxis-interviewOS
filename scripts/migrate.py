@@ -1,12 +1,13 @@
 import asyncio
 import asyncpg
-import os
 import pathlib
 import sys
 import re
 
-# Standard local docker-compose credentials if not provided by env
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://praxis:dev_password@localhost:5432/praxis")
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+from packages.config.settings import settings
+
+DATABASE_URL = settings.DATABASE_URL
 
 async def run_migrations():
     print(f"Connecting to database: {DATABASE_URL.split('@')[-1]}")

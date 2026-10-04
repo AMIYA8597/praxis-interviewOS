@@ -2,7 +2,7 @@ import pytest
 import httpx
 import respx
 from praxis_ai_gateway.base import LLMMessage
-from praxis_ai_gateway.errors import ProviderAuthError, ProviderRateLimitError, ProviderServerError
+from praxis_ai_gateway.errors import ProviderAuthError, ProviderRateLimitError
 from praxis_ai_gateway.providers.openai import OpenAIProvider
 from praxis_ai_gateway.providers.groq import GroqProvider
 

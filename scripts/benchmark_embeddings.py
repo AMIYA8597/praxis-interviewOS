@@ -1,6 +1,5 @@
 import asyncio
 import time
-from typing import List
 
 from praxis_ai_gateway.embeddings import embed_texts, EMBEDDING_MODEL_NAME, EMBEDDING_VERSION
 

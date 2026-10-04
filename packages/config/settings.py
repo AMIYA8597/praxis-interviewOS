@@ -10,15 +10,15 @@ class Settings(BaseSettings):
     LOCAL_ONLY_MODE: bool = True
     
     # Database (Required)
-    DATABASE_URL: str = Field(..., description="Postgres connection string")
-    
+    DATABASE_URL: str = Field("postgresql://praxis:dev_password@localhost:5432/praxis", description="Postgres connection string")
+
     # Supabase (Optional unless using Supabase backend)
     SUPABASE_URL: Optional[str] = None
     SUPABASE_ANON_KEY: Optional[str] = None
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
-    
+
     # Redis (Required)
-    REDIS_URL: str = Field(..., description="Redis connection string")
+    REDIS_URL: str = Field("redis://localhost:6379", description="Redis connection string")
     REDIS_MAX_CONNECTIONS: int = 10
     
     # Storage

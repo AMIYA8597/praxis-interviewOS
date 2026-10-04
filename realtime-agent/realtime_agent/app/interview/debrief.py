@@ -1,9 +1,8 @@
 import asyncio
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from pydantic import BaseModel
 from praxis_ai_gateway.prompt_builder import PromptBuilder
-from realtime_agent.app.interview.policy import InterviewSession
 
 logger = logging.getLogger(__name__)
 

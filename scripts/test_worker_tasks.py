@@ -1,9 +1,8 @@
 import asyncio
 import os
 import uuid
-import datetime
 from sqlalchemy.ext.asyncio import create_async_engine
-from backend.app.worker_tasks import process_resume, analyze_job, cleanup_old_sessions
+from backend.app.worker_tasks import process_resume, cleanup_old_sessions
 from sqlalchemy import text
 from praxis_ai_gateway.providers.ollama import OllamaProvider
 

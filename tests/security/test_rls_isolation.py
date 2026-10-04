@@ -1,16 +1,9 @@
-import os
 import psycopg2
 import pytest
 import uuid
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://praxis@localhost:5432/praxis")
 
-@pytest.fixture
-def db_conn():
-    conn = psycopg2.connect(DATABASE_URL)
-    conn.autocommit = True
-    yield conn
-    conn.close()
+
 
 def set_auth_context(cur, user_id):
     """

@@ -1,4 +1,4 @@
-from typing import Protocol, AsyncIterator, Optional, Any
+from typing import Protocol, AsyncIterator, Optional
 from pydantic import BaseModel
 
 class LLMMessage(BaseModel):

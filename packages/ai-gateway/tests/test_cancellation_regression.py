@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from praxis_ai_gateway.cancellation import CancellationToken
 from praxis_ai_gateway.providers.openai import OpenAIProvider
 from praxis_ai_gateway.resilience import CircuitBreaker, with_retries, GatewayExhaustedError

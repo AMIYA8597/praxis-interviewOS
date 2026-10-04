@@ -1,5 +1,6 @@
-import psycopg2, os
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://praxis:dev_password@localhost:5432/praxis')
+import psycopg2
+from packages.config.settings import settings
+DATABASE_URL = settings.DATABASE_URL
 conn = psycopg2.connect(DATABASE_URL)
 cur = conn.cursor()
 cur.execute('SELECT auth.uid();')

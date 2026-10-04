@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.dependencies import get_current_candidate, get_ai_gateway

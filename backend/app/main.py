@@ -74,8 +74,8 @@ def create_app() -> FastAPI:
         trace.set_tracer_provider(provider)
         app.state.tracer_provider = provider
         
-        from backend.storage.local import get_object_storage
-        app.state.object_storage = get_object_storage()
+        from backend.app.core.storage import get_storage_client
+        app.state.object_storage = get_storage_client()
         
         from praxis_ai_gateway.registry import ModelRegistry
         from praxis_ai_gateway.providers.openai import OpenAIProvider

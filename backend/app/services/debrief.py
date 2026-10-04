@@ -72,8 +72,10 @@ async def generate_session_debrief(session_id: str, db: AsyncSession, gateway: G
         resp = await gateway.route("deep_reasoning", RoutingContext(user_id="system"), "structured", messages=messages, schema=SessionDebrief)
         debrief: SessionDebrief = resp.result
         
+        summary_parts = debrief.strengths + debrief.weaknesses
         return {
             "session_id": session_id,
+            "summary": " ".join(summary_parts),
             "headline_metrics": debrief.headline_metrics.model_dump(),
             "strengths": debrief.strengths,
             "weaknesses": debrief.weaknesses,
@@ -84,6 +86,7 @@ async def generate_session_debrief(session_id: str, db: AsyncSession, gateway: G
         logger.error(f"Failed to generate debrief: {e}")
         return {
             "session_id": session_id,
+            "summary": "Failed to generate AI debrief summary.",
             "headline_metrics": {
                 "average_wpm": round(avg_wpm),
                 "average_filler_rate": total_fillers,

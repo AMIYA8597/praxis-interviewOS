@@ -1,4 +1,3 @@
-import os
 
 files = [
     'apps/web/src/app/(dashboard)/analytics/page.tsx',

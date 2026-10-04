@@ -4,8 +4,8 @@ from sqlalchemy import text
 from typing import List
 import uuid
 
-from backend.app.dependencies import get_db_session, get_current_candidate, get_object_storage, get_redis
-from backend.app.schemas.resume import ResumeResponse, ResumeFactResponse, ResumeFactUpdate
+from backend.app.dependencies import get_db_session, get_current_candidate, get_redis
+from backend.app.schemas.resume import ResumeFactResponse, ResumeFactUpdate
 from redis.asyncio import Redis
 
 router = APIRouter(tags=['resumes'])

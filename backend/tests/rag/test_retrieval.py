@@ -1,5 +1,3 @@
-import pytest
-from praxis_ai_gateway.retrieval import hybrid_search
 
 def test_retrieval_invariant_excludes_unverified():
     """

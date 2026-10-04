@@ -1,7 +1,8 @@
-import asyncio, asyncpg, sys
+import asyncio, asyncpg
 async def run():
     try:
-        conn = await asyncpg.connect('postgresql://praxis:dev_password@localhost:5432/praxis')
+        from packages.config.settings import settings
+        conn = await asyncpg.connect(settings.DATABASE_URL)
         await conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
         # Drop mock auth if exists
         await conn.execute("DROP SCHEMA IF EXISTS auth CASCADE;")

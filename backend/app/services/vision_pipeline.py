@@ -18,7 +18,10 @@ async def analyze_screenshot(image_bytes: bytes, gateway_router, routing_ctx) ->
     
     # 2. Heuristic fast-pass to avoid VLM cost
     if not ocr_text:
-        pass
+        # No OCR text — escalate to VLM
+        logger.info("No OCR text extracted. Escalating to Vision LLM.")
+        classification = "system_design"
+        problem_statement = "Design a distributed rate limiter. Diagram shows API Gateway pointing to Redis."
     elif "def " in ocr_text or "class " in ocr_text:
         classification = "coding"
         problem_statement = ocr_text

@@ -1,0 +1,122 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: praxis
+          POSTGRES_PASSWORD: dev_password
+          POSTGRES_DB: praxis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U praxis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tesseract-ocr
+
+    - name: Install Python Dependencies
+      run: |
+        pip install -r backend/requirements.txt
+        pip install pytest pytest-asyncio respx ruff fakeredis
+        pip install -e packages/config
+        pip install -e packages/ai-gateway
+        pip install -e backend
+        pip install -e realtime-agent
+
+    - name: Run Migrations
+      env:
+        DATABASE_URL: postgresql://praxis:dev_password@localhost:5432/praxis
+      run: |
+        python scripts/migrate.py
+
+    - name: Run Boundary Checks
+      run: |
+        python scripts/check_gateway_boundary.py
+        python scripts/check_prompt_construction_boundary.py
+
+    - name: Run Ruff
+      run: |
+        ruff check .
+
+    - name: Run RLS Security Suite
+      env:
+        DATABASE_URL: postgresql://praxis:dev_password@localhost:5432/praxis
+      run: |
+        pytest tests/security/ backend/tests/security/ backend/tests/integration/test_rls_bypass.py
+
+    - name: Run Remaining Python Tests
+      env:
+        DATABASE_URL: postgresql://praxis:dev_password@localhost:5432/praxis
+        REDIS_URL: redis://localhost:6379/0
+        LOCAL_ONLY_MODE: "true"
+      run: |
+        pytest backend/tests/ packages/ai-gateway/tests/ realtime-agent/tests/ tests/ -m "not live_provider" --ignore=tests/security/ --ignore=backend/tests/security/ --ignore=backend/tests/integration/test_rls_bypass.py
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 9
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'pnpm'
+
+    - name: Install Dependencies
+      run: pnpm install --frozen-lockfile
+
+    - name: Run Frontend Tests
+      run: pnpm -r run test --if-present
+
+    - name: Frontend Typecheck
+      run: |
+        cd apps/desktop && pnpm run typecheck || npx tsc --noEmit
+        cd ../web && npx tsc --noEmit
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run detect-secrets
+      run: |
+        pip install detect-secrets
+        detect-secrets scan --baseline .secrets.baseline

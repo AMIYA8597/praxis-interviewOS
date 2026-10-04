@@ -1,12 +1,9 @@
 import logging
-import json
 from sqlalchemy import text
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
-import uuid
-import asyncio
 from opentelemetry import trace
 from opentelemetry.propagate import extract
 

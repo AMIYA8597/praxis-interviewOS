@@ -1,5 +1,4 @@
 import struct
-import pytest
 
 def test_audio_frame_byte_order():
     # Matches the TS test: seq=0, ts=1600000000.0, len=2

@@ -1,7 +1,8 @@
-import asyncio, asyncpg, sys
+import asyncio, asyncpg
 async def run():
     try:
-        conn = await asyncpg.connect('postgresql://postgres:postgres@localhost:5432/postgres')
+        from packages.config.settings import settings
+        conn = await asyncpg.connect(settings.DATABASE_URL)
         await conn.execute("""
             DO $$ BEGIN
                 IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'praxis') THEN
@@ -18,7 +19,8 @@ async def run():
         await conn.close()
 
         if not db_exists:
-            conn = await asyncpg.connect('postgresql://postgres:postgres@localhost:5432/postgres')
+            from packages.config.settings import settings
+            conn = await asyncpg.connect(settings.DATABASE_URL)
             await conn.execute("CREATE DATABASE praxis OWNER praxis")
             await conn.close()
             

@@ -1,5 +1,4 @@
-import json
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from pydantic import BaseModel
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,8 +7,8 @@ import asyncio
 
 from praxis_ai_gateway.base import LLMProvider, ProviderCapabilities
 from praxis_ai_gateway.registry import ModelRegistry
-from praxis_ai_gateway.resilience import CircuitBreaker, with_retries, GatewayExhaustedError
-from praxis_ai_gateway.budget import BudgetGuard, ConsentRequiredError, BudgetExceededError
+from praxis_ai_gateway.resilience import CircuitBreaker, with_retries
+from praxis_ai_gateway.budget import BudgetGuard
 
 class RoutingContext(BaseModel):
     user_id: str

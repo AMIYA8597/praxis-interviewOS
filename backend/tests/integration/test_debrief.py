@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from backend.app.services.debrief import generate_session_debrief, SessionDebrief
-from praxis_ai_gateway.router import RoutedCall
 import uuid
 
 @pytest.mark.asyncio

@@ -1,8 +1,7 @@
 import pytest
 import yaml
-from pathlib import Path
 
-from praxis_ai_gateway.base import ProviderCapabilities, LLMProvider, LLMMessage, LLMDelta, LLMResponse
+from praxis_ai_gateway.base import ProviderCapabilities, LLMResponse
 from praxis_ai_gateway.registry import ModelRegistry, ConfigurationError
 
 class MockProvider:

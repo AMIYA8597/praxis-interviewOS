@@ -1,8 +1,7 @@
 import asyncio
-import json
 import logging
 import hashlib
-from typing import Literal, Optional
+from typing import Literal
 from pydantic import BaseModel
 from praxis_ai_gateway.router import GatewayRouter
 

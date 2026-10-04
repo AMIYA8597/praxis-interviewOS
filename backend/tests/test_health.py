@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.dependencies import get_db_session, get_redis, get_ai_gateway
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 class MockGateway:
     status = "not yet configured"

@@ -1,8 +1,7 @@
 import os
-from typing import Optional, Any
+from typing import Optional
 from praxis_ai_gateway.providers.openai import OpenAIProvider
 from praxis_ai_gateway.base import ProviderCapabilities
-from praxis_ai_gateway.cancellation_helper import with_cancellation
 
 class XAIProvider(OpenAIProvider):
     name = "xai"

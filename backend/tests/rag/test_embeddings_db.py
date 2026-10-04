@@ -1,9 +1,7 @@
 import pytest
-import asyncio
-from unittest.mock import AsyncMock
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError, DataError
+from sqlalchemy.exc import DataError
 
 @pytest.mark.asyncio
 async def test_embeddings_dimension_constraint():

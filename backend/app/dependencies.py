@@ -4,8 +4,6 @@ from typing import AsyncGenerator, Optional
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import httpx
-import jwt
-from jwt import PyJWKClient
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text

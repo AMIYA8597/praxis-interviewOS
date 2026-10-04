@@ -1,10 +1,10 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 import yaml
 import fakeredis.aioredis
 
 from praxis_ai_gateway.registry import ModelRegistry
-from praxis_ai_gateway.router import GatewayRouter, RoutingContext, RoutedCall
+from praxis_ai_gateway.router import GatewayRouter, RoutingContext
 from praxis_ai_gateway.base import ProviderCapabilities, LLMResponse
 from praxis_ai_gateway.budget import ConsentRequiredError
 

@@ -1,7 +1,4 @@
 import pytest
-import uuid
-import sqlalchemy.exc
-from unittest.mock import AsyncMock, patch
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text

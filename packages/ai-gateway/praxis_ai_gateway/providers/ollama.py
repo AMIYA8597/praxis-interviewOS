@@ -1,7 +1,7 @@
 import httpx
 import json
 import time
-from typing import AsyncIterator, Optional, Any
+from typing import AsyncIterator, Any
 from pydantic import BaseModel
 
 from praxis_ai_gateway.base import LLMProvider, LLMMessage, LLMDelta, LLMResponse, ProviderCapabilities

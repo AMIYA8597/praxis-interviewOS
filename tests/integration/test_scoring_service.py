@@ -10,7 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'ai-gateway'))
 
 from realtime_agent.app.scoring.service import trigger_background_scoring, calculate_grounding_score, score_answer_async
-from realtime_agent.app.scoring.models import AnswerScore, StarCompleteness, ClaimExtractionResult, ExtractedClaim
+from realtime_agent.app.scoring.models import StarCompleteness, ClaimExtractionResult, ExtractedClaim
 
 class MockLlmResult(BaseModel):
     result: Any

@@ -1,6 +1,5 @@
 ﻿from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import List
 from backend.app.dependencies import get_current_candidate, get_ai_gateway
 from backend.app.services.outreach import generate_cold_outreach
 from praxis_ai_gateway.router import RoutingContext

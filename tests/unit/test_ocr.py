@@ -1,6 +1,5 @@
-import pytest
 from praxis_ai_gateway.vision.ocr_pipeline import run_local_ocr
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import io
 
 def test_real_local_ocr():

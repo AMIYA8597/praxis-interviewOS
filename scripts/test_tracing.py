@@ -3,7 +3,6 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 from opentelemetry.propagate import inject, extract
-from fastapi import Request
 
 # Setup simple console export for test
 provider = TracerProvider()

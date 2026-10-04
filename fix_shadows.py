@@ -1,5 +1,3 @@
-import os
-import re
 
 files = [
     'apps/web/src/app/(dashboard)/analytics/page.tsx',

@@ -1,7 +1,6 @@
 import asyncio
 import os
 import io
-import soundfile as sf
 import librosa
 from gtts import gTTS
 

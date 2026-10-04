@@ -1,7 +1,6 @@
-import time
 import asyncio
 import random
-from typing import Optional, Callable, Any
+from typing import Callable, Any
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text

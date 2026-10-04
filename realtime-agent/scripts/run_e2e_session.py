@@ -6,7 +6,6 @@ import jwt
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
 import uvicorn
-from multiprocessing import Process
 
 temp_db_path = f"praxis_e2e_{uuid.uuid4().hex}.db"
 db_url = f"sqlite+aiosqlite:///{temp_db_path}"

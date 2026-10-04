@@ -2,7 +2,6 @@ import asyncio
 import websockets
 import json
 import time
-import base64
 import jwt
 import os
 

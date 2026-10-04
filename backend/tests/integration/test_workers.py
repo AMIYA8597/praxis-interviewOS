@@ -1,6 +1,4 @@
 import pytest
-import pytest_asyncio
-import uuid
 
 @pytest.mark.asyncio
 async def test_document_processing():

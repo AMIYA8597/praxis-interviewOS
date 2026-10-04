@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Dict, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from praxis_ai_gateway.prompt_builder import PromptBuilder

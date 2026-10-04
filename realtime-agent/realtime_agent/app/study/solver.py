@@ -1,7 +1,5 @@
-import uuid
 import logging
-from typing import Dict, List, Optional
-from realtime_agent.app.study.models import ScreenshotType, HintLadder, ClassificationResult, SolverResult, StudyItem
+from realtime_agent.app.study.models import ScreenshotType, HintLadder, ClassificationResult
 from praxis_ai_gateway.prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)

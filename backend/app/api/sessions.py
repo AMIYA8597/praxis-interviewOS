@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-from typing import Optional, List
+from typing import Optional
 import uuid
 
 from backend.app.dependencies import get_db_session, get_current_candidate

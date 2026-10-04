@@ -1,4 +1,3 @@
-import os
 import pytest
 import asyncio
 from backend.core.redis_client import get_redis

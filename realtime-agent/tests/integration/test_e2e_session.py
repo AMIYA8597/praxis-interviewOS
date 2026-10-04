@@ -7,9 +7,7 @@ import os
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
-from backend.app.db.models import Base
 from realtime_agent.app.main import app
-from httpx import AsyncClient, ASGITransport
 import jwt
 
 # Generate DB
@@ -61,7 +59,6 @@ async def test_end_to_end_session(setup_db, patch_auth, monkeypatch):
     monkeypatch.setattr("realtime_agent.app.main.Redis.from_url", mock_redis_from_url)
     
     # Mock transcriber
-    from praxis_ai_gateway.transcription.router import select_transcriber
     class MockTranscriber:
         async def connect(self, config): pass
         async def close(self): pass

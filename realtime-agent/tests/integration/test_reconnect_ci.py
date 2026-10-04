@@ -3,12 +3,9 @@ import pytest_asyncio
 import asyncio
 import json
 import websockets
-from multiprocessing import Process
 import uvicorn
-import socket
 
 import os
-import tempfile
 import uuid
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
@@ -74,7 +71,6 @@ async def realtime_server():
         task = asyncio.create_task(server.serve())
         
         # Wait for startup
-        import time
         await asyncio.sleep(2)
         
         yield "ws://127.0.0.1:8002/ws/sessions"

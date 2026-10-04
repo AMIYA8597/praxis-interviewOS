@@ -1,4 +1,3 @@
-import os
 
 mappings = {
     'bg-white': 'bg-gray-900',

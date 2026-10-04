@@ -1,5 +1,4 @@
 import os
-import shutil
 from typing import Protocol
 
 class ObjectStorage(Protocol):

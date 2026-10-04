@@ -1,7 +1,7 @@
 import asyncio
 import time
 import logging
-from typing import Callable, Any
+from typing import Callable
 
 from realtime_agent.app.protocol import Envelope
 from .metrics import (

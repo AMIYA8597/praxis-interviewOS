@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 
 def calculate_sm2(quality: int, repetitions: int, previous_interval: float, previous_ease_factor: float):
     """

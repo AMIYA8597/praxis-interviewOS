@@ -2,9 +2,8 @@ import asyncio
 import time
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-import numpy as np
 
-from praxis_ai_gateway.retrieval import vector_search, fulltext_search, hybrid_search
+from praxis_ai_gateway.retrieval import hybrid_search
 from praxis_ai_gateway.context_packer import pack_context
 from praxis_ai_gateway.embeddings import embed_texts
 from praxis_ai_gateway.chunking import chunk_text

@@ -1,5 +1,4 @@
 ﻿from fastapi import APIRouter, Depends
-from typing import Dict, Any
 from backend.app.dependencies import get_current_user, get_current_candidate, get_redis
 from redis.asyncio import Redis
 
@@ -19,7 +18,6 @@ async def delete_account(
     redis: Redis = Depends(get_redis)
 ):
     import uuid
-    from backend.worker_settings import WorkerSettings
     
     deletion_job_id = str(uuid.uuid4())
     # Enqueue arq task

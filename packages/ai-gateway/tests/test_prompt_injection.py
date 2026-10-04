@@ -1,4 +1,3 @@
-import pytest
 from praxis_ai_gateway.prompt_builder import PromptBuilder
 
 def test_prompt_injection_defense():

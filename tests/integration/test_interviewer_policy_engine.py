@@ -1,14 +1,13 @@
 import pytest
 import os
 import sys
-import asyncio
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Any
 from pydantic import BaseModel
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'ai-gateway'))
 
-from realtime_agent.app.interview.policy import InterviewSession, PolicyDecision, Turn
+from realtime_agent.app.interview.policy import InterviewSession, PolicyDecision
 
 class MockModelCallResult(BaseModel):
     result: PolicyDecision
