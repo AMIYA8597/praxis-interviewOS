@@ -20,7 +20,8 @@ dependencies = [
     "torchaudio",
     "librosa",
     "sounddevice",
-    "onnxruntime"
+    "onnxruntime",
+    "faster-whisper"
 ]
 
 [tool.setuptools]
