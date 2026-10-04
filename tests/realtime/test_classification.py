@@ -43,9 +43,9 @@ class MockRouter:
             result = QuestionClassification(is_question=True, confidence=0.9, question_type="follow_up", domain="ML", is_follow_up=True)
         elif "how do i sort an array" in transcript:
             result = QuestionClassification(is_question=True, confidence=0.9, question_type="dsa", domain="General", is_follow_up=False)
-        elif "tell me about your background" in content:
+        elif "tell me about your background" in transcript:
             result = QuestionClassification(is_question=True, confidence=0.9, question_type="behavioral", domain="General", is_follow_up=False)
-        elif "explain kubernetes" in content:
+        elif "explain kubernetes" in transcript:
             result = QuestionClassification(is_question=True, confidence=0.9, question_type="devops", domain="Cloud", is_follow_up=False)
         else:
             result = QuestionClassification(is_question=True, confidence=0.5, question_type="other", domain="Other", is_follow_up=False)
