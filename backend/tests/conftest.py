@@ -1,5 +1,4 @@
 import pytest
-from httpx import AsyncClient
 from backend.app.main import app
 
 from fastapi import Request, HTTPException

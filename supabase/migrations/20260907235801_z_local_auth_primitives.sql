@@ -1,6 +1,7 @@
 -- MOCK AUTH PRIMITIVES (Local Dev Only)
--- Safe to run against real Supabase due to IF NOT EXISTS and CREATE OR REPLACE checks,
--- but typically this would be skipped in production via migration pipeline config.
+-- Safe to run against real Supabase: roles and schema use IF NOT EXISTS guards,
+-- and auth.uid() is only created when it does not already exist, so Supabase's
+-- native implementation (owned by supabase_auth_admin) is never replaced.
 
 DO $$ 
 BEGIN 
@@ -14,20 +15,27 @@ END $$;
 
 CREATE SCHEMA IF NOT EXISTS auth;
 
-CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$
-DECLARE
-    claims jsonb;
+DO $guard$
 BEGIN
-    claims := current_setting('request.jwt.claims', true)::jsonb;
-    IF claims IS NULL OR claims->>'sub' IS NULL THEN
-        RETURN NULL;
+    IF to_regprocedure('auth.uid()') IS NULL THEN
+        EXECUTE $fn$
+            CREATE FUNCTION auth.uid() RETURNS uuid AS $body$
+            DECLARE
+                claims jsonb;
+            BEGIN
+                claims := current_setting('request.jwt.claims', true)::jsonb;
+                IF claims IS NULL OR claims->>'sub' IS NULL THEN
+                    RETURN NULL;
+                END IF;
+                RETURN (claims->>'sub')::uuid;
+            EXCEPTION
+                WHEN OTHERS THEN
+                    RETURN NULL;
+            END;
+            $body$ LANGUAGE plpgsql STABLE;
+        $fn$;
     END IF;
-    RETURN (claims->>'sub')::uuid;
-EXCEPTION
-    WHEN OTHERS THEN
-        RETURN NULL;
-END;
-$$ LANGUAGE plpgsql STABLE;
+END $guard$;
 
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO authenticated;

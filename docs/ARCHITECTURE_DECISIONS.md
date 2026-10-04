@@ -329,6 +329,25 @@ We deleted the custom jitter buffer and sequence reordering logic in `transport.
 3. **Set Environment Variable:** Export `DATABASE_URL` with your real connection string (e.g., `export DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres`).
 4. **Run Migrations:** Execute `python scripts/migrate.py` to apply all migrations idempotently to the real project.
 
+### Real Supabase Deployment
+
+**Migration tool**: Use `scripts/migrate.py` pointed at the real project's connection string:
+```
+DATABASE_URL=postgresql://[user]:[pass]@[host]:5432/[db] python scripts/migrate.py
+```
+The script reads `DATABASE_URL` from the environment, falling back to localhost only as a development default.
+
+Each run records two things:
+- `schema_migrations` — one row per applied file; the source of truth for "already applied, skip".
+- `migration_status` — per-migration timing and outcome (`success` / `failed`) written through the `log_migration(version, name, time_ms, status)` SQL function. `version` is the timestamp prefix (e.g. `20260908000001`), `name` the remainder of the filename (e.g. `migration_tracking`). A failed migration is rolled back, logged as `failed`, and the run exits non-zero. Inspect with `SELECT * FROM migration_status ORDER BY applied_at DESC;` (table has RLS enabled with no policies, so it is only visible to the owner / `service_role`).
+
+**First-time Supabase project setup checklist**:
+1. Link project: `supabase link --project-ref <ref>`
+2. The real Supabase environment already provides `auth.uid()` and the `authenticated`/`service_role` roles natively — the `z_local_auth_primitives` migration's idempotency guards (`IF NOT EXISTS` for roles and schema, and an existence check before creating `auth.uid()`) make it safe to run but it will no-op on real Supabase
+3. Set environment variables: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+4. Run `python scripts/migrate.py` to apply all migrations in order
+5. Verify RLS: `python -m pytest tests/security/test_rls_enabled.py -v`
+
 ## ADR-020: Enforcing UI Design Consistency (Dark Theme)
 **Date:** 2026-09-20
 **Context:** Migrated Next.js dashboard pages (Analytics, Candidates, Study Workbench, Platform Tracker) used inconsistent light-theme styling (bg-white, text-gray-600) compared to the overarching dark, dense aesthetic of the desktop and web shell layout (bg-gray-950).

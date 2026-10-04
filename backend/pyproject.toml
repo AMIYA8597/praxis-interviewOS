@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["app", "core", "api", "models", "services", "storage"]
+packages = ["app", "core", "api", "models", "services"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

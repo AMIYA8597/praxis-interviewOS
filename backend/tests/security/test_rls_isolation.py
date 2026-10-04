@@ -5,7 +5,6 @@ import os
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import ProgrammingError
 
 _raw_db_url = os.environ.get("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres")
 if _raw_db_url.startswith("postgresql://") and "asyncpg" not in _raw_db_url:

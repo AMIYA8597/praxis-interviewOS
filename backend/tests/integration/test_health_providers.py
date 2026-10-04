@@ -1,5 +1,4 @@
 import pytest
-from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_health_providers_with_and_without_key(test_client, monkeypatch):

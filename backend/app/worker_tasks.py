@@ -276,13 +276,15 @@ async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str
         storage = get_object_storage()
         
         from backend.app.core.deletion import DeletionService
-        # Run deletion logic within a dedicated service for better unit testability
+        # Run deletion logic within a dedicated service for better unit testability.
+        # This wrapper is the single source of truth for deletion_jobs status:
+        # DeletionService performs the cascade only and never touches deletion_jobs.
         service = DeletionService(db=db, storage_client=storage)
         try:
             await service.process_deletion_job(candidate_id)
             async with db.begin() as conn:
                 await conn.execute(text(
-                    "UPDATE deletion_jobs SET status = 'completed', rows_deleted_summary = '{}', updated_at = NOW() WHERE id = :id"
+                    "UPDATE deletion_jobs SET status = 'completed', rows_deleted_summary = '{}', completed_at = NOW(), updated_at = NOW() WHERE id = :id"
                 ), {"id": deletion_job_id})
         except Exception as e:
             async with db.begin() as conn:
