@@ -107,7 +107,7 @@ async def test_barge_in_mechanism():
     assert len(stream_results) > 0
     assert "mock generation complete" not in "".join(stream_results)
     
-    await redis.close()
+    await redis.aclose()
     assert transitions == [SessionState.YIELDING, SessionState.AWAITING_ANSWER]
     assert sm.state == SessionState.AWAITING_ANSWER
     

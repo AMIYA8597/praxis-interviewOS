@@ -49,6 +49,7 @@ async def setup_db():
         os.remove(temp_db_path)
 
 @pytest.mark.asyncio
+@pytest.mark.live_provider
 async def test_end_to_end_session(setup_db, patch_auth, monkeypatch):
     import fakeredis
     fake_redis = fakeredis.FakeAsyncRedis()
