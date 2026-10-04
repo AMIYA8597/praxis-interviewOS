@@ -163,7 +163,7 @@ async def _load_session(factory, session_id: str, user_id: str) -> Optional[Dict
         return info
 
 
-async def _mark_status(factory, session_id: str, status: str, *, started: bool = False, ended: bool = False) -> None:
+async def _mark_status(factory, session_id: str, status: str, user_id: str, *, started: bool = False, ended: bool = False) -> None:
     sets = ["status = :st"]
     if started:
         sets.append("started_at = COALESCE(started_at, CURRENT_TIMESTAMP)")
@@ -171,13 +171,15 @@ async def _mark_status(factory, session_id: str, status: str, *, started: bool =
         sets.append("ended_at = CURRENT_TIMESTAMP")
     try:
         async with factory() as db:
-            await db.execute(text(f"UPDATE practice_sessions SET {', '.join(sets)} WHERE id = :sid"), {"st": status, "sid": session_id})
+            claims = json.dumps({"sub": user_id})
+            await db.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
+            await db.execute(text(f"UPDATE practice_sessions SET {', '.join(sets)} WHERE id = CAST(:sid AS uuid)"), {"st": status, "sid": session_id})
             await db.commit()
     except Exception as e:
         # Older/test schemas may lack started_at; fall back to status only.
         logger.warning("session_status_update_failed", extra={"session_id": session_id, "error_type": type(e).__name__})
         if started or ended:
-            await _mark_status(factory, session_id, status)
+            await _mark_status(factory, session_id, status, user_id)
 
 
 def create_app() -> FastAPI:
@@ -327,6 +329,16 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
     from realtime_agent.app.session.state_machine import SessionState
 
     db = factory()
+    try:
+        import json
+        claims_json = json.dumps({"sub": user_id})
+        await db.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims_json})
+    except Exception as e:
+        logger.error("ws_session_set_config_failed", extra={"session_id": session_id, "error_type": type(e).__name__})
+        await db.close()
+        await _close(websocket, WS_INTERNAL, "Internal error")
+        return
+
     sm = SessionManager(session_id, db, enqueue_event)
     generation_manager = SessionGenerationManager()
     barge_in_controller = BargeInController(
@@ -432,7 +444,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
             else:
                 spawn(orchestrator.begin_interviewer_turn(), "begin_interviewer_turn")
         else:
-            await _mark_status(factory, session_id, "active", started=True)
+            await _mark_status(factory, session_id, "active", user_id, started=True)
             await sm.transition(SessionState.PREFLIGHT)
             await sm.transition(SessionState.WARMING)
             await sm.transition(SessionState.READY)
@@ -587,13 +599,13 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
         # DEBRIEF counts as finished: the interview is over even if the debrief is still
         # being generated (POST /sessions/{id}/end can regenerate it).
         if final_state in (SessionState.STOPPED, SessionState.FAILED, SessionState.DEBRIEF):
-            await _mark_status(factory, session_id, "failed" if final_state == SessionState.FAILED else "completed", ended=True)
+            await _mark_status(factory, session_id, "failed" if final_state == SessionState.FAILED else "completed", user_id, ended=True)
             try:
                 await redis.delete(state_key)
             except Exception:
                 pass
         else:
-            await _save_for_reconnect(app, sm, orchestrator, session_id, state_key, conn_id, seq["next"], final_state)
+            await _save_for_reconnect(app, sm, orchestrator, session_id, state_key, conn_id, seq["next"], final_state, user_id)
         try:
             await db.close()
         except Exception:
@@ -609,7 +621,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
         )
 
 
-async def _save_for_reconnect(app, sm, orchestrator, session_id, state_key, conn_id, next_seq, final_state) -> None:
+async def _save_for_reconnect(app, sm, orchestrator, session_id, state_key, conn_id, next_seq, final_state, user_id: str) -> None:
     """Persist resumable state and schedule failure if the client never returns."""
     from realtime_agent.app.session.manager import SessionManager
     from realtime_agent.app.session.state_machine import SessionState
@@ -642,10 +654,12 @@ async def _save_for_reconnect(app, sm, orchestrator, session_id, state_key, conn
             if data.get("state") != "RECONNECTING" or data.get("conn_id") != conn_id:
                 return
             async with app.state.db_session_factory() as cleanup_db:
+                claims_json = json.dumps({"sub": user_id})
+                await cleanup_db.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims_json})
                 reaper = SessionManager(session_id, cleanup_db, lambda *a, **k: None)
                 reaper.sm.state = SessionState.RECONNECTING
                 await reaper.try_transition(SessionState.FAILED, reason="reconnection_timeout")
-            await _mark_status(app.state.db_session_factory, session_id, "failed", ended=True)
+            await _mark_status(app.state.db_session_factory, session_id, "failed", user_id, ended=True)
             await redis.delete(state_key)
             logger.info("session_reaped", extra={"session_id": session_id})
         except Exception as e:

@@ -17,39 +17,44 @@ def test_rls_cross_tenant_isolation(db_conn):
     cur = db_conn.cursor()
     
     # 1. Bypass RLS temporarily (as postgres superuser) to set up test users
-    cur.execute("RESET ROLE;")
-    
-    user_a = str(uuid.uuid4())
-    user_b = str(uuid.uuid4())
-    
-    # Insert users into auth.users and profiles (simulate signup)
-    for u in [user_a, user_b]:
-        cur.execute("INSERT INTO auth.users (id) VALUES (%s) ON CONFLICT DO NOTHING", (u,))
-        cur.execute("INSERT INTO profiles (id) VALUES (%s) ON CONFLICT DO NOTHING", (u,))
+    import psycopg2
+    from packages.config.settings import settings
+    admin_url = settings.DATABASE_URL.replace("praxis_app", "postgres")
+    with psycopg2.connect(admin_url) as admin_conn:
+        admin_conn.autocommit = True
+        admin_cur = admin_conn.cursor()
+        
+        user_a = str(uuid.uuid4())
+        user_b = str(uuid.uuid4())
+        
+        # Insert users into auth.users and profiles (simulate signup)
+        for u in [user_a, user_b]:
+            admin_cur.execute("INSERT INTO auth.users (id) VALUES (%s) ON CONFLICT DO NOTHING", (u,))
+            admin_cur.execute("INSERT INTO profiles (id) VALUES (%s) ON CONFLICT DO NOTHING", (u,))
 
-    # 2. Build a realistic connected graph of data for User A
-    cand_a = str(uuid.uuid4())
-    cur.execute("INSERT INTO candidates (id, profile_id, full_name) VALUES (%s, %s, 'User A')", (cand_a, user_a))
-    
-    proj_a = str(uuid.uuid4())
-    cur.execute("INSERT INTO candidate_projects (id, candidate_id, name) VALUES (%s, %s, 'Project A')", (proj_a, cand_a))
-    
-    doc_a = str(uuid.uuid4())
-    cur.execute("INSERT INTO documents (id, candidate_id, kind) VALUES (%s, %s, 'other')", (doc_a, cand_a))
-    
-    cur.execute("INSERT INTO document_chunks (document_id, chunk_index, content, embedding_model, embedding_version) VALUES (%s, 1, 'Chunk A', 'test', '1.0')", (doc_a,))
-    
-    job_a = str(uuid.uuid4())
-    cur.execute("INSERT INTO jobs (id, candidate_id, company_name, role_title) VALUES (%s, %s, 'Acme', 'Engineer')", (job_a, cand_a))
-    
-    session_a = str(uuid.uuid4())
-    cur.execute("INSERT INTO practice_sessions (id, candidate_id, job_id, mode, interview_type, difficulty, status) VALUES (%s, %s, %s, 'drill', 'behavioral', 'warmup', 'active')", (session_a, cand_a, job_a))
-    
-    turn_a = str(uuid.uuid4())
-    cur.execute("INSERT INTO session_turns (id, session_id, turn_index, speaker, text) VALUES (%s, %s, 1, 'candidate', 'Hello')", (turn_a, session_a))
+        # 2. Build a realistic connected graph of data for User A
+        cand_a = str(uuid.uuid4())
+        admin_cur.execute("INSERT INTO candidates (id, profile_id, full_name) VALUES (%s, %s, 'User A')", (cand_a, user_a))
+        
+        proj_a = str(uuid.uuid4())
+        admin_cur.execute("INSERT INTO candidate_projects (id, candidate_id, name) VALUES (%s, %s, 'Project A')", (proj_a, cand_a))
+        
+        doc_a = str(uuid.uuid4())
+        admin_cur.execute("INSERT INTO documents (id, candidate_id, kind) VALUES (%s, %s, 'other')", (doc_a, cand_a))
+        
+        admin_cur.execute("INSERT INTO document_chunks (document_id, chunk_index, content, embedding_model, embedding_version) VALUES (%s, 1, 'Chunk A', 'test', '1.0')", (doc_a,))
+        
+        job_a = str(uuid.uuid4())
+        admin_cur.execute("INSERT INTO jobs (id, candidate_id, company_name, role_title) VALUES (%s, %s, 'Acme', 'Engineer')", (job_a, cand_a))
+        
+        session_a = str(uuid.uuid4())
+        admin_cur.execute("INSERT INTO practice_sessions (id, candidate_id, job_id, mode, interview_type, difficulty, status) VALUES (%s, %s, %s, 'drill', 'behavioral', 'warmup', 'active')", (session_a, cand_a, job_a))
+        
+        turn_a = str(uuid.uuid4())
+        admin_cur.execute("INSERT INTO session_turns (id, session_id, turn_index, speaker, text) VALUES (%s, %s, 1, 'candidate', 'Hello')", (turn_a, session_a))
 
-    item_a = str(uuid.uuid4())
-    cur.execute("INSERT INTO study_items (id, candidate_id, topic, source, prompt) VALUES (%s, %s, 'Topic A', 'manual', 'Prompt A')", (item_a, cand_a))
+        item_a = str(uuid.uuid4())
+        admin_cur.execute("INSERT INTO study_items (id, candidate_id, topic, source, prompt) VALUES (%s, %s, 'Topic A', 'manual', 'Prompt A')", (item_a, cand_a))
 
     # 3. Authenticate as User B
     set_auth_context(cur, user_b)

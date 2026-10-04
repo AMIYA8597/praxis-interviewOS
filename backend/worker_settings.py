@@ -53,6 +53,15 @@ async def on_startup(ctx):
     engine = create_engine(settings)
     ctx["db_engine"] = engine
     ctx["db_session_factory"] = create_session_factory(engine)
+    
+    # Cross-tenant operations need a superuser connection to bypass RLS.
+    admin_url = settings.async_database_url.replace("praxis_app:app_password", "postgres:postgres")
+    if admin_url != settings.async_database_url:
+        admin_engine = create_engine(settings, url=admin_url)
+    else:
+        admin_engine = engine
+    ctx["admin_db_engine"] = admin_engine
+    
     ctx["redis"] = Redis.from_url(settings.REDIS_URL, decode_responses=True, max_connections=settings.REDIS_MAX_CONNECTIONS)
     ctx["providers"] = build_providers()
     ctx["gateway"] = build_gateway(settings, ctx["redis"], ctx["db_session_factory"], providers=ctx["providers"])
@@ -67,6 +76,8 @@ async def on_shutdown(ctx):
         await ctx["redis"].aclose()
     if ctx.get("db_engine") is not None:
         await ctx["db_engine"].dispose()
+    if ctx.get("admin_db_engine") is not None and ctx.get("admin_db_engine") is not ctx.get("db_engine"):
+        await ctx.get("admin_db_engine").dispose()
     logger.info("worker_stopped")
 
 

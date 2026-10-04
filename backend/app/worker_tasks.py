@@ -124,11 +124,20 @@ def _gateway(ctx: Dict[str, Any]):
     return gw
 
 
-async def _set_doc_status(db, document_id: str, status: str, error: Optional[str] = None) -> None:
-    async with db.begin() as conn:
+import contextlib
+
+@contextlib.asynccontextmanager
+async def user_db_conn(db_engine, candidate_id: str):
+    async with db_engine.begin() as conn:
+        claims = json.dumps({"sub": candidate_id})
+        await conn.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
+        yield conn
+
+async def _set_doc_status(db_engine, candidate_id: str, document_id: str, status: str, error: Optional[str] = None) -> None:
+    async with user_db_conn(db_engine, candidate_id) as conn:
         await conn.execute(
-            text("UPDATE documents SET processing_status = :s, error_message = :e WHERE id = CAST(:id AS uuid)"),
-            {"s": status, "e": error, "id": document_id},
+            text("UPDATE documents SET processing_status = :s, error_message = :e WHERE id = CAST(:id AS uuid) AND candidate_id = CAST(:cid AS uuid)"),
+            {"s": status, "e": error, "id": document_id, "cid": candidate_id},
         )
 
 
@@ -142,7 +151,8 @@ async def process_resume(ctx: Dict[str, Any], document_id: str):
     from backend.app.services import document_processing as dp
 
     db = ctx["db_engine"]
-    async with db.begin() as conn:
+    admin_db = ctx.get("admin_db_engine", db)
+    async with admin_db.begin() as conn:
         doc = (
             await conn.execute(
                 text("""
@@ -157,7 +167,7 @@ async def process_resume(ctx: Dict[str, Any], document_id: str):
         raise PermanentJobError(f"document {document_id} not found")
     candidate_id = str(doc.candidate_id)
     bind(candidate_id=candidate_id)
-    await _set_doc_status(db, document_id, "parsing")
+    await _set_doc_status(db, candidate_id, document_id, "parsing")
 
     storage = ctx.get("storage") or get_storage_client()
     try:
@@ -165,18 +175,18 @@ async def process_resume(ctx: Dict[str, Any], document_id: str):
     except Exception as e:
         # Missing blob is permanent; transient storage errors are retried by the wrapper.
         if "not found" in str(e).lower():
-            await _set_doc_status(db, document_id, "failed", "Uploaded file is missing from storage")
+            await _set_doc_status(db, candidate_id, document_id, "failed", "Uploaded file is missing from storage")
             raise PermanentJobError("blob missing") from e
         raise
 
     try:
         content = await dp.run_in_thread(dp.extract_text, raw, doc.mime_type, doc.original_filename or "")
     except DocumentParseError as e:
-        await _set_doc_status(db, document_id, "failed", str(e))
+        await _set_doc_status(db, candidate_id, document_id, "failed", str(e))
         raise PermanentJobError(str(e)) from e
     logger.info("resume_parsed", extra={"document_id": document_id, "text_chars": len(content)})
 
-    await _set_doc_status(db, document_id, "embedding")
+    await _set_doc_status(db, candidate_id, document_id, "embedding")
     chunks = await dp.run_in_thread(dp.chunk, content)
 
     embeddings: Optional[List[List[float]]] = None
@@ -190,7 +200,7 @@ async def process_resume(ctx: Dict[str, Any], document_id: str):
         warning = "Semantic embeddings unavailable; keyword search only"
         logger.error("embedding_failed_degraded", extra={"document_id": document_id, "error_type": type(e).__name__})
 
-    async with db.begin() as conn:
+    async with user_db_conn(db, candidate_id) as conn:
         stored = await dp.store_chunks(conn, document_id, chunks, embeddings)
     logger.info("resume_chunks_stored", extra={"document_id": document_id, "chunks": stored, "embedded": embeddings is not None})
 
@@ -198,7 +208,7 @@ async def process_resume(ctx: Dict[str, Any], document_id: str):
     if extracted is not None and doc.resume_id is not None:
         await _persist_resume_profile(db, candidate_id, str(doc.resume_id), extracted)
 
-    await _set_doc_status(db, document_id, "ready", warning)
+    await _set_doc_status(db, candidate_id, document_id, "ready", warning)
     return {"status": "ready", "chunks": stored, "embedded": embeddings is not None, "extracted": extracted is not None}
 
 
@@ -230,7 +240,7 @@ async def _extract_resume_profile(ctx, candidate_id: str, content: str):
 
 
 async def _persist_resume_profile(db, candidate_id: str, resume_id: str, profile) -> None:
-    async with db.begin() as conn:
+    async with user_db_conn(db, candidate_id) as conn:
         version_no = (
             await conn.execute(
                 text("SELECT COALESCE(MAX(version_number), 0) + 1 FROM resume_versions WHERE resume_id = CAST(:r AS uuid)"),
@@ -311,7 +321,8 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
     from praxis_ai_gateway.schemas.jd import ExtractedJobBlueprint
 
     db = ctx["db_engine"]
-    async with db.begin() as conn:
+    admin_db = ctx.get("admin_db_engine", db)
+    async with admin_db.begin() as conn:
         row = (
             await conn.execute(
                 text("SELECT id, candidate_id, raw_jd_text FROM jobs WHERE id = CAST(:id AS uuid)"), {"id": job_id}
@@ -319,12 +330,15 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
         ).first()
         if row is None:
             raise PermanentJobError(f"job {job_id} not found")
+            
+    candidate_id = str(row.candidate_id)
+    bind(candidate_id=candidate_id)
+    
+    async with user_db_conn(db, candidate_id) as conn:
         await conn.execute(
             text("UPDATE jobs SET processing_status = 'parsing', error_message = NULL WHERE id = CAST(:id AS uuid)"),
             {"id": job_id},
         )
-    candidate_id = str(row.candidate_id)
-    bind(candidate_id=candidate_id)
 
     builder = PromptBuilder()
     builder.add_system(
@@ -345,7 +359,7 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
     except Exception as e:
         if int(ctx.get("job_try", 1) or 1) < DEFAULT_MAX_TRIES:
             raise
-        async with db.begin() as conn:
+        async with user_db_conn(db, candidate_id) as conn:
             await conn.execute(
                 text("UPDATE jobs SET processing_status = 'failed', error_message = :e WHERE id = CAST(:id AS uuid)"),
                 {"id": job_id, "e": "AI analysis unavailable; please retry later"},
@@ -354,7 +368,7 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
 
     topics = [t.topic[:200] for t in bp.likely_topics][:20]
     top_skills = [r.skill_text for r in bp.job_requirements if r.priority == "required"][:15]
-    async with db.begin() as conn:
+    async with user_db_conn(db, candidate_id) as conn:
         blueprint_id = (
             await conn.execute(
                 text("""
@@ -411,23 +425,32 @@ async def generate_session_debrief_job(ctx: Dict[str, Any], session_id: str):
     from backend.app.services.debrief import generate_session_debrief, persist_session_debrief
 
     bind(session_id=session_id)
-    factory = ctx.get("db_session_factory")
-    if factory is None:
-        from backend.app.db.session import create_session_factory
-
-        factory = ctx["db_session_factory"] = create_session_factory(ctx["db_engine"])
-    async with factory() as db:
+    
+    db = ctx["db_engine"]
+    admin_db = ctx.get("admin_db_engine", db)
+    async with admin_db.begin() as conn:
         owner = (
-            await db.execute(
+            await conn.execute(
                 text("SELECT candidate_id FROM practice_sessions WHERE id = CAST(:s AS uuid)"), {"s": session_id}
             )
         ).first()
         if owner is None:
             raise PermanentJobError(f"session {session_id} not found")
-        bind(candidate_id=str(owner[0]))
-        result = await generate_session_debrief(session_id, db, _gateway(ctx), user_id=str(owner[0]))
-        await persist_session_debrief(db, session_id, result)
-        await db.commit()
+            
+    candidate_id = str(owner[0])
+    bind(candidate_id=candidate_id)
+    
+    from backend.app.db.session import create_session_factory
+    # We must ensure the session uses the jwt claims, but generate_session_debrief expects a Session object.
+    # The simplest way is to manually run set_config on the session before passing it down.
+    factory = create_session_factory(db)
+    import json
+    claims = json.dumps({"sub": candidate_id})
+    async with factory() as session:
+        await session.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
+        result = await generate_session_debrief(session_id, session, _gateway(ctx), user_id=candidate_id)
+        await persist_session_debrief(session, session_id, result)
+        await session.commit()
     return {"status": "ready"}
 
 
@@ -441,7 +464,7 @@ async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str
     from backend.app.core.storage import get_storage_client
 
     db = ctx["db_engine"]
-    async with db.begin() as conn:
+    async with user_db_conn(db, candidate_id) as conn:
         await conn.execute(
             text("UPDATE deletion_jobs SET status = 'running', updated_at = NOW() WHERE id = CAST(:id AS uuid)"),
             {"id": deletion_job_id},
@@ -450,11 +473,15 @@ async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str
         storage = ctx.get("storage") or get_storage_client()
     except Exception:
         storage = None
-    service = DeletionService(db=db, storage_client=storage)
+        
+    # DeletionService might need an AsyncSession or a Connection. We need to wrap it if it uses the db engine directly.
+    # Actually, DeletionService probably creates its own connections or uses the engine. We'll let it use admin_db to delete everything safely.
+    admin_db = ctx.get("admin_db_engine", db)
+    service = DeletionService(db=admin_db, storage_client=storage)
     try:
         summary = await service.process_deletion_job(candidate_id)
     except Exception as e:
-        async with db.begin() as conn:
+        async with user_db_conn(db, candidate_id) as conn:
             await conn.execute(
                 text("""
                     UPDATE deletion_jobs SET status = 'failed', error_message = :err, updated_at = NOW()
@@ -463,7 +490,7 @@ async def delete_candidate_account_job(ctx: Dict[str, Any], deletion_job_id: str
                 {"id": deletion_job_id, "err": f"{type(e).__name__}"},
             )
         raise
-    async with db.begin() as conn:
+    async with user_db_conn(db, candidate_id) as conn:
         await conn.execute(
             text("""
                 UPDATE deletion_jobs
@@ -503,7 +530,7 @@ async def generate_study_material_job(ctx: Dict[str, Any], topic: str, difficult
     )
     parsed: GeneratedMaterial = resp.result
     item_id = str(uuid.uuid4())
-    async with ctx["db_engine"].begin() as conn:
+    async with user_db_conn(ctx["db_engine"], candidate_id) as conn:
         await conn.execute(
             text("""
                 INSERT INTO study_items (id, candidate_id, topic, source, prompt, reference_answer, difficulty)
@@ -527,7 +554,9 @@ async def generate_study_material_job(ctx: Dict[str, Any], topic: str, difficult
 
 async def cleanup_old_sessions(ctx: Dict[str, Any]):
     """Abandon sessions with no state change for 2h, and never-started sessions after 24h."""
-    async with ctx["db_engine"].begin() as conn:
+    # ACTS ACROSS ALL TENANTS: explicit elevated superuser connection
+    admin_db = ctx.get("admin_db_engine", ctx["db_engine"])
+    async with admin_db.begin() as conn:
         active = await conn.execute(
             text("""
                 UPDATE practice_sessions ps
@@ -553,7 +582,9 @@ async def purge_expired_retention_data(ctx: Dict[str, Any]):
     from backend.app.core.storage import get_storage_client
 
     storage = ctx.get("storage") or get_storage_client()
-    async with ctx["db_engine"].begin() as conn:
+    # ACTS ACROSS ALL TENANTS: explicit elevated superuser connection
+    admin_db = ctx.get("admin_db_engine", ctx["db_engine"])
+    async with admin_db.begin() as conn:
         seg = await conn.execute(
             text("""
                 DELETE FROM transcript_segments ts
