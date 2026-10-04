@@ -91,54 +91,90 @@ async def aggregate_session_data(session_id: str, db: AsyncSession) -> Dict[str,
         }
     }
 
-async def generate_debrief(session_id: str, db: AsyncSession, gateway_router, routing_ctx) -> SessionDebrief:
+def aggregate_from_raw_data(raw: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Task 1 & 2: Generates the debrief using aggregated data and one structured call.
+    Convert the test-stub / pre-fetched raw dict format into the aggregated shape
+    that generate_debrief_from_aggregated expects.  Accepts the same structure that
+    the integration test fixtures provide:
+        {"turns": [...], "scores": [...], "metrics": [...], "claims": [...], "jd_blueprint": {...}}
     """
-    aggregated = await aggregate_session_data(session_id, db)
-    
+    turns = raw.get("turns", [])
+    scores = raw.get("scores", [])
+    metrics = raw.get("metrics", [])
+    claims = raw.get("claims", [])
+    jd_blueprint = raw.get("jd_blueprint", {})
+
+    avg_wpm = sum(m.get("wpm") or 0 for m in metrics) / max(len(metrics), 1) if metrics else 120.0
+    avg_filler = sum(m.get("filler_rate") or 0 for m in metrics) / max(len(metrics), 1) if metrics else 0.0
+    avg_score = sum(s.get("overall", 0) for s in scores) / max(len(scores), 1) if scores else 0.0
+
+    covered = list({t.get("topic") for t in turns if t.get("topic")})
+    likely = set(jd_blueprint.get("likely_topics", []))
+    missed = [t for t in likely if t not in covered]
+
+    return {
+        "turn_count": len(turns),
+        "averages": {"wpm": avg_wpm, "filler_rate": avg_filler, "overall_score": avg_score},
+        "weakest_scores": [s.get("turn_id") for s in scores if s.get("overall", 1.0) < 0.6],
+        "strongest_scores": [s.get("turn_id") for s in scores if s.get("overall", 0.0) >= 0.8],
+        "flagged_claims": [c.get("claim_text") for c in claims if not c.get("supported")],
+        "coverage": {"covered": covered, "missed": missed},
+    }
+
+
+async def generate_debrief_from_aggregated(
+    session_id: str, aggregated: Dict[str, Any], gateway_router, routing_ctx
+) -> SessionDebrief:
+    """Pure generation step — takes already-aggregated data, builds prompt, calls LLM."""
     with open("prompts/debrief/summary_v1.md", "r") as f:
         sys_prompt = f.read()
-        
+
     builder = PromptBuilder()
     builder.add_system(sys_prompt)
-    
-    # Pass the aggregated data as trusted context
+
     agg_str = (
         f"Turn Count: {aggregated['turn_count']}\n"
-        f"Averages -> WPM: {aggregated['averages']['wpm']}, Filler Rate: {aggregated['averages']['filler_rate']}, Score: {aggregated['averages']['overall_score']}\n"
+        f"Averages -> WPM: {aggregated['averages']['wpm']}, "
+        f"Filler Rate: {aggregated['averages']['filler_rate']}, "
+        f"Score: {aggregated['averages']['overall_score']}\n"
         f"Strongest Turns: {aggregated['strongest_scores']}\n"
         f"Weakest Turns: {aggregated['weakest_scores']}\n"
         f"Flagged Claims: {aggregated['flagged_claims']}\n"
-        f"JD Coverage -> Covered: {aggregated['coverage']['covered']}, Missed: {aggregated['coverage']['missed']}\n"
+        f"JD Coverage -> Covered: {aggregated['coverage']['covered']}, "
+        f"Missed: {aggregated['coverage']['missed']}\n"
     )
     builder.add_trusted_context("aggregated_session_data", agg_str)
-    
     builder.add_output_schema(SessionDebrief)
-    
+
     try:
         call_result = await gateway_router.route(
             "deep_reasoning",
             routing_ctx,
             "generate_structured",
             messages=[m.model_dump(exclude_none=True) for m in builder.build()],
-            schema=SessionDebrief
+            schema=SessionDebrief,
         )
         return call_result.result
     except Exception as e:
         logger.error(f"Failed to generate debrief: {e}")
         return SessionDebrief(
             headline_metrics=HeadlineMetrics(average_wpm=0, average_filler_rate=0, average_score=0),
-            strengths=[], weaknesses=[], flagged_claims=[], jd_coverage={"covered": [], "missed": []}
+            strengths=[], weaknesses=[], flagged_claims=[], jd_coverage={"covered": [], "missed": []},
         )
 
-def trigger_debrief_generation(session_id: str, db: AsyncSession, gateway_router, routing_ctx):
+
+async def generate_debrief(session_id: str, db: AsyncSession, gateway_router, routing_ctx) -> SessionDebrief:
+    """
+    Task 1 & 2: Generates the debrief using aggregated data and one structured call.
+    """
+    aggregated = await aggregate_session_data(session_id, db)
+    return await generate_debrief_from_aggregated(session_id, aggregated, gateway_router, routing_ctx)
+
+def trigger_debrief_generation(session_id: str, aggregated: Dict[str, Any], gateway_router, routing_ctx):
     """
     Task 3: Trigger Timing
-    Fires off debrief generation as an asyncio background task to prevent blocking the state transition.
+    Fires off debrief generation as an asyncio background task.
+    Accepts pre-aggregated session data (no DB connection needed here).
     """
-    # In a real app, this could be an arq enqueue: await redis.enqueue_job("generate_debrief", session_id)
-    # Here we use create_task for intra-process fire-and-forget.
-    task = asyncio.create_task(generate_debrief(session_id, db, gateway_router, routing_ctx))
-    # We optionally attach a callback to save the result, but for this exercise we return the task for awaiting in tests
+    task = asyncio.create_task(generate_debrief_from_aggregated(session_id, aggregated, gateway_router, routing_ctx))
     return task

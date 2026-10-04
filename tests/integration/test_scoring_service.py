@@ -104,7 +104,9 @@ class MockScoringRouter:
         if method_name == "generate_structured":
             return await self.provider.generate_structured(**kwargs)
         if method_name == "generate":
-            return await self.provider.generate(**kwargs)
+            text_result = await self.provider.generate(**kwargs)
+            # Real router returns RoutedCall(result=...) — wrap to match expected shape.
+            return MockLlmResult(result=text_result)
         raise NotImplementedError()
 
 class DummyStateMachine:

@@ -10,8 +10,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'ai-gateway'))
 
 from realtime_agent.app.interview.debrief import (
-    generate_debrief,
+    generate_debrief_from_aggregated,
     trigger_debrief_generation,
+    aggregate_from_raw_data,
     SessionDebrief,
     HeadlineMetrics
 )
@@ -133,8 +134,9 @@ async def test_trigger_timing(full_session_db_stub):
     router = MockDebriefGatewayRouter()
     
     start_time = time.time()
-    # Trigger on DEBRIEF state transition
-    task = trigger_debrief_generation("sess_123", full_session_db_stub, router, None)
+    # Trigger on DEBRIEF state transition — pass pre-aggregated data (no DB needed)
+    aggregated = aggregate_from_raw_data(full_session_db_stub)
+    task = trigger_debrief_generation("sess_123", aggregated, router, None)
     trigger_duration = time.time() - start_time
     
     # Should be near-instant, not the 0.5s of the mock processing
@@ -150,7 +152,7 @@ async def test_short_session_hedging(short_session_db_stub):
     Task 4: Honest handling of short/sparse sessions
     """
     router = MockDebriefGatewayRouter()
-    debrief = await generate_debrief("sess_short", short_session_db_stub, router, None)
+    debrief = await generate_debrief_from_aggregated("sess_short", aggregate_from_raw_data(short_session_db_stub), router, None)
     
     # Check that short session hedges its claims instead of fabricating trends
     assert any("short session" in s for s in debrief.strengths)
@@ -162,9 +164,9 @@ async def test_full_session_to_full_debrief(full_session_db_stub):
     Task 5: Full session to full debrief integration.
     """
     router = MockDebriefGatewayRouter()
-    
+
     # Run the generation
-    debrief = await generate_debrief("sess_full", full_session_db_stub, router, None)
+    debrief = await generate_debrief_from_aggregated("sess_full", aggregate_from_raw_data(full_session_db_stub), router, None)
     
     # Assert genuine traceability
     assert any("Turn 2" in s for s in debrief.strengths)

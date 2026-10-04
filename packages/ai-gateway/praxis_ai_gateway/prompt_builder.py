@@ -31,22 +31,25 @@ class PromptBuilder:
         return self
 
     def add_untrusted(self, label: str, source: str, content: str) -> "PromptBuilder":
-        # Untrusted content sanitization:
-        # Strip or escape any sequences that resemble our builder's own section-delimiter syntax.
+        # Untrusted content sanitization: specific tag patterns must run first so that
+        # the general proximity-escape pass doesn't consume the `<` before the tag
+        # normalisation regexes can canonicalise case and escape both brackets.
         safe_content = content
-        
-        # Extended delimiter-injection defense: escape any < or > if it appears near the word TRUSTED, UNTRUSTED, SYSTEM, or INSTRUCTION
-        safe_content = re.sub(
-            r'([<>].{0,10}(?:TRUSTED|UNTRUSTED|SYSTEM|INSTRUCTION))|((?:TRUSTED|UNTRUSTED|SYSTEM|INSTRUCTION).{0,10}[<>])', 
-            lambda m: m.group(0).replace('<', '&lt;').replace('>', '&gt;'), 
-            safe_content, 
-            flags=re.IGNORECASE
-        )
-        
-        # Strip exact closing tag match (case insensitive) with optional spacing
+
+        # 1. Normalise and escape our own delimiter tags (case-insensitive, any attributes/spacing)
         safe_content = re.sub(r'</UNTRUSTED_DOCUMENT\s*>', '&lt;/UNTRUSTED_DOCUMENT&gt;', safe_content, flags=re.IGNORECASE)
         safe_content = re.sub(r'<UNTRUSTED_DOCUMENT[^>]*>', '&lt;UNTRUSTED_DOCUMENT&gt;', safe_content, flags=re.IGNORECASE)
+        # Strip TRUSTED_CONTEXT tags entirely, keeping only their text content
         safe_content = re.sub(r'</?TRUSTED_CONTEXT[^>]*>', '', safe_content, flags=re.IGNORECASE)
+
+        # 2. Extended delimiter-injection defense: escape any < or > appearing near sensitive
+        #    keywords that weren't already caught by the specific patterns above.
+        safe_content = re.sub(
+            r'([<>].{0,10}(?:TRUSTED|UNTRUSTED|SYSTEM|INSTRUCTION))|((?:TRUSTED|UNTRUSTED|SYSTEM|INSTRUCTION).{0,10}[<>])',
+            lambda m: m.group(0).replace('<', '&lt;').replace('>', '&gt;'),
+            safe_content,
+            flags=re.IGNORECASE,
+        )
         
         block = f"<UNTRUSTED_DOCUMENT label=\"{label}\" source=\"{source}\">\n{safe_content.strip()}\n</UNTRUSTED_DOCUMENT>"
         self._untrusted_content.append(block)
