@@ -35,8 +35,13 @@ export function useRealtimeSession(sessionId: string) {
         const data = JSON.parse(event.data);
         setEvents(prev => [...prev, data]);
         
-        // Dispatch identical DOM event names to Envelope.type
-        window.dispatchEvent(new CustomEvent(data.type, { detail: data }));
+        // Dispatch identical DOM event names to Envelope.type. Payload fields are
+        // spread onto the detail (envelope fields kept) because listeners read
+        // e.g. `detail.to_state` / `detail.text` directly.
+        const detail = data && typeof data.payload === 'object' && data.payload !== null
+          ? { ...data, ...data.payload }
+          : data;
+        window.dispatchEvent(new CustomEvent(data.type, { detail }));
       } catch (err) {
         console.error('Failed to parse WebSocket message', err);
       }

@@ -16,16 +16,17 @@ ROUTE_LIMITS = {
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if settings.LOCAL_ONLY_MODE and not getattr(settings, "ENABLE_RATE_LIMIT", True):
+        if not settings.ENABLE_RATE_LIMIT:
             return await call_next(request)
-            
+
         redis = getattr(request.app.state, "redis_pool", None)
         if not redis:
             return await call_next(request)
 
         # 1. Resolve scope + identifier
-        identifier = request.client.host if request.client else "unknown"
-        
+        client_ip = request.client.host if request.client else "unknown"
+        identifier = client_ip
+
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
@@ -34,7 +35,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 # True cryptographic verification happens in the `get_current_user` dependency.
                 payload = jwt.decode(token, options={"verify_signature": False})
                 if "sub" in payload:
-                    identifier = payload["sub"]
+                    # The claim is unverified here, so never key on it alone:
+                    # a forged `sub` must not drain another user's bucket.
+                    identifier = f"{payload['sub']}:{client_ip}"
             except Exception:
                 pass # Fall back to IP if token is malformed
 

@@ -1,145 +1,132 @@
 import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
 
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
-import os
-
-resource = Resource.create({"service.name": "praxis-core-api"})
-provider = TracerProvider(resource=resource)
-otlp_endpoint = os.environ.get("OTLP_ENDPOINT", "http://localhost:4318/v1/traces")
-provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint)))
-trace.set_tracer_provider(provider)
-
-from packages.config.settings import Settings
-from backend.app.middleware import RequestIdMiddleware
-from backend.app.exceptions import global_exception_handler
-
-from backend.app.api.health import router as health_router
+from backend.app.api.admin import router as admin_router
+from backend.app.api.analytics import router as analytics_router
+from backend.app.api.applications import router as applications_router
 from backend.app.api.auth import router as auth_router
 from backend.app.api.candidates import router as candidates_router
-from backend.app.api.resumes import router as resumes_router
-from backend.app.api.projects import router as projects_router
+from backend.app.api.health import router as health_router
 from backend.app.api.jobs import router as jobs_router
+from backend.app.api.outreach import router as outreach_router
+from backend.app.api.projects import router as projects_router
+from backend.app.api.resumes import router as resumes_router
 from backend.app.api.sessions import router as sessions_router
 from backend.app.api.study import router as study_router
-from backend.app.api.outreach import router as outreach_router
-from backend.app.api.applications import router as applications_router
-from backend.app.api.analytics import router as analytics_router
-from backend.app.api.admin import router as admin_router
-
-from contextvars import ContextVar
-import logging
-
-request_id_context: ContextVar[str] = ContextVar("request_id", default="-")
-
-class RequestIdFilter(logging.Filter):
-    def filter(self, record):
-        record.request_id = request_id_context.get()
-        return True
-
-# Configure logging format to include request_id
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - [req_id=%(request_id)s] - %(message)s')
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
-handler.addFilter(RequestIdFilter())
+from backend.app.core.bootstrap import build_gateway, configure_logging, configure_tracing
+from backend.app.core.context import request_id_context  # noqa: F401  (re-exported for older imports)
+from backend.app.core.queue import create_arq_pool
+from backend.app.db.session import create_engine, create_session_factory
+from backend.app.exceptions import register_exception_handlers
+from backend.app.middleware import RequestIdMiddleware
+from packages.config.settings import Settings
 
 logger = logging.getLogger("praxis.backend")
-logger.setLevel(logging.INFO)
-logger.handlers = []
-logger.addHandler(handler)
 
-# Ensure the root logger also uses it if needed, but for now we attach to our namespace
-logging.getLogger("uvicorn").addFilter(RequestIdFilter())
 
-def create_app() -> FastAPI:
-    settings = Settings()
-    
+def create_app(cfg: Settings | None = None) -> FastAPI:
+    settings = cfg or Settings()
+    configure_logging(settings, "praxis-core-api")
+    configure_tracing(settings, "praxis-core-api")
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # Startup
-        engine = create_async_engine(settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"), echo=False)
-        app.state.db_session_factory = async_sessionmaker(engine, expire_on_commit=False)
-        
-        redis_pool = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        engine = create_engine(settings)
+        app.state.db_engine = engine
+        app.state.db_session_factory = create_session_factory(engine)
+
+        redis_pool = Redis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            max_connections=settings.REDIS_MAX_CONNECTIONS,
+            socket_timeout=settings.REDIS_SOCKET_TIMEOUT_S,
+            socket_connect_timeout=settings.REDIS_SOCKET_TIMEOUT_S,
+            health_check_interval=settings.REDIS_HEALTH_CHECK_INTERVAL_S,
+        )
         app.state.redis_pool = redis_pool
-        
-        provider = TracerProvider()
-        trace.set_tracer_provider(provider)
-        app.state.tracer_provider = provider
-        
+        app.state.arq_pool = await create_arq_pool(settings.REDIS_URL)
+
         from backend.app.core.storage import get_storage_client
+
         app.state.object_storage = get_storage_client()
-        
-        from praxis_ai_gateway.registry import ModelRegistry
-        from praxis_ai_gateway.providers.openai import OpenAIProvider
-        from praxis_ai_gateway.providers.ollama import OllamaProvider
-        from praxis_ai_gateway.router import GatewayRouter
-        
-        registry = ModelRegistry("config/models.yaml")
-        
-        providers = {}
-        if os.environ.get("OPENAI_API_KEY"):
-            providers["openai"] = OpenAIProvider()
-        providers["ollama"] = OllamaProvider()
-        
-        app.state.ai_gateway = GatewayRouter(
-            registry=registry,
-            providers=providers,
-            redis=app.state.redis_pool,
-            db=None
-        )
-        
+        app.state.ai_gateway = build_gateway(settings, redis_pool, app.state.db_session_factory)
+
         logger.info(
-            "backend_ready: db=connected, redis=connected, telemetry=initialized, env=%s",
-            settings.APP_ENV
+            "backend_ready",
+            extra={
+                "app_env": settings.APP_ENV,
+                "queue": "connected" if app.state.arq_pool else "unavailable",
+                "auth_dev_bypass": settings.auth_dev_bypass_enabled,
+                "providers": sorted(app.state.ai_gateway.providers),
+            },
         )
-        yield
-        
-        # Shutdown
-        await engine.dispose()
-        await redis_pool.close()
+        if settings.auth_dev_bypass_enabled:
+            logger.warning("auth_dev_bypass_enabled: every bearer token maps to AUTH_DEV_USER_ID (development only)")
+        try:
+            yield
+        finally:
+            if app.state.arq_pool is not None:
+                try:
+                    await app.state.arq_pool.aclose()
+                except Exception:
+                    pass
+            await redis_pool.aclose()
+            await engine.dispose()
+            logger.info("backend_stopped")
 
-    docs_url = "/docs" if settings.APP_ENV != "production" else None
-    redoc_url = "/redoc" if settings.APP_ENV != "production" else None
-    openapi_url = "/openapi.json" if settings.APP_ENV != "production" else None
-
+    docs_enabled = settings.api_docs_enabled
     app = FastAPI(
         title="PRAXIS Backend API",
         lifespan=lifespan,
-        docs_url=docs_url,
-        redoc_url=redoc_url,
-        openapi_url=openapi_url
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+        debug=False,
     )
 
     from backend.app.rate_limiter import RateLimitMiddleware
+
+    # Order: last added = outermost. RequestId must wrap everything so even
+    # rate-limited/CORS-rejected responses carry an id and get logged.
     app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=settings.CORS_ALLOW_CREDENTIALS and "*" not in settings.cors_origins,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        expose_headers=["X-Request-ID", "Retry-After"],
+    )
     app.add_middleware(RequestIdMiddleware)
-    app.add_exception_handler(Exception, global_exception_handler)
+    register_exception_handlers(app)
 
     api_prefix = "/api/v1"
-    app.include_router(health_router, prefix=api_prefix)
-    app.include_router(auth_router, prefix=api_prefix)
-    app.include_router(candidates_router, prefix=api_prefix)
-    app.include_router(resumes_router, prefix=api_prefix)
-    app.include_router(projects_router, prefix=api_prefix)
-    app.include_router(jobs_router, prefix=api_prefix)
-    app.include_router(sessions_router, prefix=api_prefix)
-    app.include_router(study_router, prefix=api_prefix)
-    app.include_router(outreach_router, prefix=api_prefix)
-    app.include_router(applications_router, prefix=api_prefix)
-    app.include_router(analytics_router, prefix=api_prefix)
-    app.include_router(admin_router, prefix=api_prefix)
-    
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    FastAPIInstrumentor.instrument_app(app)
+    for r in (
+        health_router,
+        auth_router,
+        candidates_router,
+        resumes_router,
+        projects_router,
+        jobs_router,
+        sessions_router,
+        study_router,
+        outreach_router,
+        applications_router,
+        analytics_router,
+        admin_router,
+    ):
+        app.include_router(r, prefix=api_prefix)
+
+    if settings.otel_enabled:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        FastAPIInstrumentor.instrument_app(app)
 
     return app
+
 
 app = create_app()

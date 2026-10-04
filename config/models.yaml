@@ -1,7 +1,11 @@
+# Provider keys MUST match the `name` attribute of the registered provider
+# instances (see praxis_ai_gateway/providers/*.py): ollama, groq, openai,
+# anthropic, gemini, deepseek, xai. Candidates are tried in order; the
+# gateway falls back to the next one on failure / open circuit breaker.
 aliases:
   fast_classify:
-    - provider: "local"
-      model: "llama-3.1-8b-instruct"
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
       max_latency_ms: 500
     - provider: "groq"
       model: "llama-3.1-8b-instant"
@@ -9,6 +13,21 @@ aliases:
     - provider: "openai"
       model: "gpt-4o-mini"
       max_latency_ms: 2000
+      cost_per_1k_input: 0.00015
+      cost_per_1k_output: 0.00060
+
+  # General structured extraction / drafting (resume + JD parsing, outreach,
+  # study material). Free/local first.
+  reasoning:
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 30000
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "openai"
+      model: "gpt-4o-mini"
+      max_latency_ms: 10000
       cost_per_1k_input: 0.00015
       cost_per_1k_output: 0.00060
 
@@ -23,7 +42,15 @@ aliases:
       max_latency_ms: 10000
       cost_per_1k_input: 0.00300
       cost_per_1k_output: 0.01500
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 30000
 
+  # Speech-to-text is routed by praxis_ai_gateway.transcription.router, not
+  # by GatewayRouter; "local" there means faster-whisper.
   stt_stream:
     - provider: "local"
       model: "faster-whisper-small.en"

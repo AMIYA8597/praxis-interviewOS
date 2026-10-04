@@ -27,7 +27,7 @@ async def aggregate_session_data(session_id: str, db: AsyncSession) -> Dict[str,
     Queries real Postgres tables.
     """
     # 1. Turns
-    query_turns = text("SELECT id, text_content, turn_index FROM session_turns WHERE session_id = :sid ORDER BY turn_index")
+    query_turns = text("SELECT id, text, turn_index FROM session_turns WHERE session_id = :sid ORDER BY turn_index")
     turns_res = await db.execute(query_turns, {"sid": session_id})
     turns = turns_res.fetchall()
     

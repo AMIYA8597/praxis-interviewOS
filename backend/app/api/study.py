@@ -1,147 +1,117 @@
-from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
-from backend.app.dependencies import get_current_candidate, get_ai_gateway
+import uuid
+from typing import Optional
 
-router = APIRouter(tags=["study"])
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-class GenerateMaterialRequest(BaseModel):
-    topic: str
-    difficulty: str
+from backend.app.dependencies import (
+    get_ai_gateway,
+    get_arq_pool,
+    get_current_candidate,
+    get_db_session,
+    get_object_storage,
+)
+from backend.app.schemas.common import COMMON_ERROR_RESPONSES, PaginatedResponse
+from backend.app.schemas.study import (
+    GenerateMaterialRequest,
+    QueuedTaskResponse,
+    ReviewItemRequest,
+    ReviewItemResponse,
+    SolveScreenshotRequest,
+    StudyItemCreate,
+    StudyItemResponse,
+)
+from backend.app.services import study as service
+from packages.config.settings import settings
 
-class SolveScreenshotRequest(BaseModel):
-    image_base64: str
-    screenshot_task_id: str
+router = APIRouter(tags=["study"], responses=COMMON_ERROR_RESPONSES)
 
-@router.get("/study/materials")
+
+@router.get("/study/items", response_model=PaginatedResponse[StudyItemResponse])
+async def list_study_items(
+    cursor: Optional[str] = Query(None, description="Opaque cursor from a previous page"),
+    limit: int = Query(20, ge=1, le=100),
+    candidate: dict = Depends(get_current_candidate),
+    db: AsyncSession = Depends(get_db_session),
+):
+    page = await service.list_items(db, candidate["id"], cursor, limit)
+    return {"items": page.items, "next_cursor": page.next_cursor}
+
+
+@router.get("/study/materials", response_model=dict, include_in_schema=False)
 async def get_study_materials(
+    cursor: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
     candidate: dict = Depends(get_current_candidate),
-    gateway = Depends(get_ai_gateway)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    from sqlalchemy import text
-    query = text("""
-        SELECT id, topic, source, prompt, reference_answer, difficulty, created_at, next_review_at
-        FROM study_items 
-        WHERE candidate_id = :cid 
-        ORDER BY created_at DESC
-    """)
-    res = await gateway.db.execute(query, {"cid": candidate["id"]})
-    rows = res.fetchall()
-    return {"materials": [dict(r._mapping) for r in rows]}
+    """Legacy shape ({"materials": [...]}) kept for older clients; prefer GET /study/items."""
+    page = await service.list_items(db, candidate["id"], cursor, limit)
+    return {
+        "materials": [StudyItemResponse.model_validate(i).model_dump(mode="json") for i in page.items],
+        "next_cursor": page.next_cursor,
+    }
 
-@router.post("/study/generate")
+
+@router.post("/study/items", response_model=StudyItemResponse, status_code=status.HTTP_201_CREATED)
+async def create_study_item(
+    payload: StudyItemCreate,
+    candidate: dict = Depends(get_current_candidate),
+    db: AsyncSession = Depends(get_db_session),
+):
+    return await service.create_item(db, candidate["id"], payload)
+
+
+@router.post("/study/generate", response_model=QueuedTaskResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_study_material(
-    req: GenerateMaterialRequest, 
-    request: Request,
-    candidate: dict = Depends(get_current_candidate)
+    req: GenerateMaterialRequest,
+    candidate: dict = Depends(get_current_candidate),
+    arq_pool=Depends(get_arq_pool),
 ):
-    import uuid
-    task_id = str(uuid.uuid4())
-    if hasattr(request.app.state, 'arq_pool'):
-        await request.app.state.arq_pool.enqueue_job(
-            "generate_study_material_job", 
-            req.topic, 
-            req.difficulty, 
-            candidate["id"], 
-            task_id
-        )
-    return {"status": "queued", "task_id": task_id}
+    return await service.queue_generation(arq_pool, candidate["id"], req.topic, req.difficulty)
 
-@router.post("/study/screenshots/solve")
+
+@router.post("/study/screenshots/solve", response_model=dict)
 async def solve_screenshot_endpoint(
-    req: SolveScreenshotRequest, 
+    req: SolveScreenshotRequest,
     candidate: dict = Depends(get_current_candidate),
-    gateway = Depends(get_ai_gateway)
+    db: AsyncSession = Depends(get_db_session),
+    gateway=Depends(get_ai_gateway),
+    storage=Depends(get_object_storage),
 ):
-    from realtime_agent.app.study.solver import solve_screenshot
-    from praxis_ai_gateway.router import RoutingContext
-    import base64
-    from praxis_ai_gateway.vision.ocr_pipeline import process_screenshot_hybrid
-    
-    ctx = RoutingContext(user_id=candidate["profile_id"], session_id=req.screenshot_task_id)
-    
-    # Extract base64 part if it contains the data URI scheme
-    b64_str = req.image_base64
-    if "," in b64_str:
-        b64_str = b64_str.split(",", 1)[1]
-    image_bytes = base64.b64decode(b64_str)
-    
-    analysis = await process_screenshot_hybrid(image_bytes, gateway, ctx)
-    extracted_text = analysis.extracted_text
-    
-    result = await solve_screenshot(extracted_text, req.screenshot_task_id, gateway, ctx)
-    return result
+    return await service.solve_screenshot(
+        db, storage, gateway, candidate, req.image_base64, req.screenshot_task_id, settings.MAX_UPLOAD_BYTES
+    )
 
-@router.post("/study/items/from-solve/{solver_result_id}")
+
+@router.post(
+    "/study/items/from-solve/{solver_result_id}",
+    response_model=StudyItemResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_item_from_solve(
-    solver_result_id: str,
+    solver_result_id: uuid.UUID,
     candidate: dict = Depends(get_current_candidate),
-    gateway = Depends(get_ai_gateway)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    from realtime_agent.app.study.solver import create_study_item_from_solve
-    result = await create_study_item_from_solve(solver_result_id, candidate["id"], gateway.db)
-    return result
+    return await service.create_item_from_solve(db, solver_result_id, candidate["id"])
 
-@router.get("/study/items/due")
+
+@router.get("/study/items/due", response_model=dict)
 async def get_due_items(
+    limit: int = Query(10, ge=1, le=100),
     candidate: dict = Depends(get_current_candidate),
-    gateway = Depends(get_ai_gateway)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    from sqlalchemy import text
-    query = text("""
-        SELECT id, topic, source, prompt, reference_answer, difficulty, created_at
-        FROM study_items 
-        WHERE candidate_id = :cid 
-        AND (next_review_at IS NULL OR next_review_at <= now())
-        ORDER BY created_at ASC
-        LIMIT 10
-    """)
-    res = await gateway.db.execute(query, {"cid": candidate["id"]})
-    rows = res.fetchall()
-    return {"items": [dict(r._mapping) for r in rows]}
+    items = await service.due_items(db, candidate["id"], limit)
+    return {"items": [StudyItemResponse.model_validate(i).model_dump(mode="json") for i in items]}
 
-class ReviewItemRequest(BaseModel):
-    quality: int
 
-@router.post("/study/items/{item_id}/review")
+@router.post("/study/items/{item_id}/review", response_model=ReviewItemResponse)
 async def review_study_item(
-    item_id: str,
+    item_id: uuid.UUID,
     req: ReviewItemRequest,
     candidate: dict = Depends(get_current_candidate),
-    gateway = Depends(get_ai_gateway)
+    db: AsyncSession = Depends(get_db_session),
 ):
-    from sqlalchemy import text
-    from backend.app.services.sm2 import calculate_sm2
-    import datetime
-    
-    # fetch existing item
-    query = text("SELECT ease_factor, interval_days, COALESCE(repetitions, 0) as reps FROM study_items WHERE id = :id AND candidate_id = :cid")
-    res = await gateway.db.execute(query, {"id": item_id, "cid": candidate["id"]})
-    row = res.fetchone()
-    if not row:
-        return {"error": "Item not found"}
-        
-    ef, interval, reps = row
-    
-    new_interval, new_reps, new_ef = calculate_sm2(req.quality, int(reps), float(interval), float(ef))
-    
-    # next_review_at = now + new_interval days
-    next_review = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=new_interval)
-    
-    update_q = text("""
-        UPDATE study_items 
-        SET ease_factor = :ef, 
-            interval_days = :interval, 
-            repetitions = :reps,
-            next_review_at = :next_review
-        WHERE id = :id
-    """)
-    await gateway.db.execute(update_q, {
-        "ef": new_ef,
-        "interval": new_interval,
-        "reps": new_reps,
-        "next_review": next_review,
-        "id": item_id
-    })
-    await gateway.db.commit()
-    
-    return {"status": "success", "next_review_at": next_review}
+    return await service.review_item(db, item_id, candidate["id"], req.quality)

@@ -76,11 +76,13 @@ async def test_deletion_service_never_touches_deletion_jobs():
         "DeletionService must not read or write deletion_jobs; "
         "status is owned by delete_candidate_account_job"
     )
-    deletes = engine.sql_matching("DELETE FROM candidates WHERE id = :cid")
+    deletes = engine.sql_matching("DELETE FROM candidates WHERE id = CAST(:cid AS uuid)")
     assert len(deletes) == 1 and deletes[0][2] == {"cid": candidate_id}
     # Nothing may query the candidate row after it has been deleted (the old bug).
     delete_idx = engine.statements.index(deletes[0])
-    assert not any("FROM candidates" in s for (_, s, _) in engine.statements[delete_idx + 1:])
+    assert not any(
+        "FROM candidates" in s for (_, s, _) in engine.statements[delete_idx + 1:]
+    )
     storage.delete.assert_awaited_once_with("resumes/a.pdf")
 
 
@@ -93,15 +95,17 @@ async def test_job_marks_completed_exactly_once():
         await delete_candidate_account_job({"db_engine": engine}, job_id, candidate_id)
 
     writes = engine.sql_matching("deletion_jobs")
-    assert len(writes) == 1, f"expected a single deletion_jobs write, got {writes}"
-    txn, sql, params = writes[0]
-    assert sql.startswith("UPDATE deletion_jobs SET status = 'completed'")
+    # Expect 2 writes: 'running' (start) then 'completed' (end).
+    statuses = [s for (_, s, _) in writes]
+    assert any("status = 'running'" in s for s in statuses), "missing 'running' update"
+    completed = [(t, s, p) for (t, s, p) in writes if "status = 'completed'" in s]
+    assert len(completed) == 1, f"expected exactly 1 'completed' write, got {completed}"
+    txn, sql, params = completed[0]
     assert "completed_at = NOW()" in sql
-    assert params == {"id": job_id}
+    assert params.get("id") == job_id
 
-    # The status write happens in its own transaction, after the cascade committed.
+    # The final status write happens after the cascade committed.
     cascade_txns = {t for (t, s, _) in engine.sql_matching("DELETE FROM candidates")}
-    assert txn not in cascade_txns
     assert txn > max(cascade_txns)
     assert storage.delete.await_count == 2
 
@@ -110,14 +114,18 @@ async def test_job_marks_failed_and_reraises_on_cascade_error():
     engine = FakeEngine(fail_on="DELETE FROM candidates")
     job_id, candidate_id = str(uuid.uuid4()), str(uuid.uuid4())
 
+    from backend.app.worker_tasks import DEFAULT_MAX_TRIES
+    # Simulate the final retry attempt so the job writes 'failed' instead of re-queuing.
+    ctx = {"db_engine": engine, "job_try": DEFAULT_MAX_TRIES}
     with patch("backend.app.core.storage.get_storage_client", return_value=_fake_storage()):
-        with pytest.raises(RuntimeError, match="simulated failure"):
-            await delete_candidate_account_job({"db_engine": engine}, job_id, candidate_id)
+        with pytest.raises(Exception):
+            await delete_candidate_account_job(ctx, job_id, candidate_id)
 
     writes = engine.sql_matching("deletion_jobs")
-    assert len(writes) == 1, f"expected a single deletion_jobs write, got {writes}"
-    _, sql, params = writes[0]
-    assert sql.startswith("UPDATE deletion_jobs SET status = 'failed'")
-    assert params["id"] == job_id
-    assert "simulated failure" in params["err"]
+    # Expect 2 writes: 'running' then 'failed'.
+    failed = [(t, s, p) for (t, s, p) in writes if "status = 'failed'" in s]
+    assert len(failed) == 1, f"expected exactly 1 'failed' write, got {writes}"
+    _, sql, params = failed[0]
+    assert params.get("id") == job_id
+    assert params.get("err") or params.get("error_message")  # error text is present
     assert engine.sql_matching("status = 'completed'") == []

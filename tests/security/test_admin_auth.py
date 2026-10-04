@@ -1,43 +1,41 @@
-import pytest
+import uuid
 from unittest.mock import AsyncMock, MagicMock
-from fastapi import FastAPI, Depends, HTTPException
 
-from backend.app.dependencies import require_admin
+import pytest
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-app = FastAPI()
+from backend.app.dependencies import require_admin
 
-# A mock router using the dependency
-@app.get("/admin/test", dependencies=[Depends(require_admin)])
-async def admin_route():
-    return {"message": "Admin access granted"}
+
+def _db_returning(row):
+    mock_db = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.first.return_value = row
+    result.fetchone.return_value = row
+    mock_db.execute.return_value = result
+    return mock_db
+
 
 @pytest.mark.asyncio
 async def test_require_admin_blocks_non_admin():
-    mock_db = AsyncMock(spec=AsyncSession)
-    mock_result = MagicMock()
-    # Return None simulating no row in admin_users table
-    mock_result.fetchone.return_value = None
-    mock_db.execute.return_value = mock_result
-    
-    from backend.app.dependencies import require_admin
-    
     with pytest.raises(HTTPException) as exc:
-        await require_admin(current_user={"sub": "user_123"}, db=mock_db)
-        
+        await require_admin(current_user={"sub": str(uuid.uuid4())}, db=_db_returning(None))
     assert exc.value.status_code == 403
     assert exc.value.detail == "Admin access required"
 
+
 @pytest.mark.asyncio
 async def test_require_admin_allows_admin():
-    mock_db = AsyncMock(spec=AsyncSession)
-    mock_result = MagicMock()
-    # Return (True,) simulating a profile where is_admin = True
-    mock_result.fetchone.return_value = (True,)
-    mock_db.execute.return_value = mock_result
-    
-    from backend.app.dependencies import require_admin
-    user = {"sub": "admin_456"}
-    
-    result = await require_admin(current_user=user, db=mock_db)
+    user = {"sub": str(uuid.uuid4())}
+    result = await require_admin(current_user=user, db=_db_returning((uuid.uuid4(),)))
     assert result == user
+
+
+@pytest.mark.asyncio
+async def test_require_admin_rejects_non_uuid_subject_without_querying():
+    db = _db_returning((uuid.uuid4(),))
+    with pytest.raises(HTTPException) as exc:
+        await require_admin(current_user={"sub": "admin_456"}, db=db)
+    assert exc.value.status_code == 403
+    db.execute.assert_not_called()

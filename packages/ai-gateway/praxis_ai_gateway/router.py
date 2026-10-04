@@ -4,11 +4,16 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import asyncio
+import logging
+import time
 
 from praxis_ai_gateway.base import LLMProvider, ProviderCapabilities
 from praxis_ai_gateway.registry import ModelRegistry
 from praxis_ai_gateway.resilience import CircuitBreaker, with_retries
 from praxis_ai_gateway.budget import BudgetGuard
+from praxis_ai_gateway.persistence import as_uuid_str, resolve_db, safe_write
+
+logger = logging.getLogger("praxis.ai_gateway")
 
 class RoutingContext(BaseModel):
     user_id: str
@@ -27,12 +32,21 @@ class AllProvidersUnavailableError(Exception):
     pass
 
 class GatewayRouter:
-    def __init__(self, registry: ModelRegistry, providers: Dict[str, LLMProvider], redis: Redis, db: AsyncSession):
+    def __init__(
+        self,
+        registry: ModelRegistry,
+        providers: Dict[str, LLMProvider],
+        redis: Redis,
+        db: Optional[AsyncSession] = None,
+        session_factory: Any = None,
+    ):
         self.registry = registry
         self.providers = providers
         self.redis = redis
-        self.db = db
-        self.budget_guard = BudgetGuard(redis, db)
+        # `db` may be a request-scoped session; long-lived routers should pass
+        # `session_factory` instead so telemetry uses short-lived sessions.
+        self.db = resolve_db(db, session_factory)
+        self.budget_guard = BudgetGuard(redis, self.db)
 
     async def route(self, task: str, context: RoutingContext, method_name: str, *args, cancellation_token: Any = None, **kw) -> RoutedCall:
         if method_name == "generate_structured":
@@ -96,9 +110,10 @@ class GatewayRouter:
             async def _call():
                 return await getattr(provider, method_name)(*args, cancellation_token=cancellation_token, model=model_id, **kw)
                 
+            from opentelemetry import trace
+            tracer = trace.get_tracer(__name__)
+            started = time.perf_counter()
             try:
-                from opentelemetry import trace
-                tracer = trace.get_tracer(__name__)
                 with tracer.start_as_current_span("router_attempt") as span:
                     span.set_attribute("provider", provider.name)
                     span.set_attribute("model", model_id)
@@ -107,10 +122,23 @@ class GatewayRouter:
                         span.set_attribute("fell_back_from", last_provider)
                         span.set_attribute("fallback_reason", failure_reasons.get(last_provider, "Unknown"))
                     result = await with_retries(_call, breaker, cancellation_token)
-                
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                latency_ms = round((time.perf_counter() - started) * 1000, 1)
+                failure_reasons[provider.name] = str(e)
+                logger.warning("ai_call_failed", extra={
+                    "task": task, "provider": provider.name, "model": model_id, "method": method_name,
+                    "latency_ms": latency_ms, "error_type": type(e).__name__,
+                })
+                last_provider = provider.name
+                continue
+
+            latency_ms = round((time.perf_counter() - started) * 1000, 1)
+            # Telemetry is best-effort and must never turn a success into a failure.
+            try:
                 if last_provider:
                     await self._log_fallback(task, last_provider, provider.name, model_id, failure_reasons.get(last_provider, "Unknown"))
-                    
                 await self._log_usage(
                     user_id=context.user_id,
                     session_id=context.session_id,
@@ -119,14 +147,15 @@ class GatewayRouter:
                     capability=method_name,
                     result=result,
                     config=config,
-                    is_free=provider.capabilities().is_free_tier
+                    is_free=provider.capabilities().is_free_tier,
+                    latency_ms=latency_ms,
+                    fell_back_from=last_provider,
+                    task=task,
                 )
-                    
-                return RoutedCall(provider_name=provider.name, model=model_id, result=result)
             except Exception as e:
-                failure_reasons[provider.name] = str(e)
-                last_provider = provider.name
-                
+                logger.warning("ai_usage_logging_failed", extra={"error_type": type(e).__name__})
+            return RoutedCall(provider_name=provider.name, model=model_id, result=result)
+
         err_msg = "All providers unavailable:\n" + "\n".join([f"- {p}: {r}" for p, r in failure_reasons.items()])
         raise AllProvidersUnavailableError(err_msg)
 
@@ -189,44 +218,50 @@ class GatewayRouter:
         raise AllProvidersUnavailableError(f"All providers failed streaming: {failure_reasons}")
         
     async def _log_fallback(self, task: str, fell_back_from: str, fell_back_to: str, model: str, reason: str):
-        query = text("""
-            INSERT INTO model_requests (id, candidate_id, provider, model, tokens_in, tokens_out, latency_ms, status, fell_back_from)
-            VALUES (gen_random_uuid(), NULL, :provider, :model, 0, 0, 0, 500, :fell_back_from)
-        """)
-        await self.db.execute(query, {
-            "provider": fell_back_to,
-            "model": model,
-            "fell_back_from": fell_back_from
+        logger.info("ai_fallback", extra={
+            "task": task, "fell_back_from": fell_back_from, "provider": fell_back_to, "model": model,
+            "reason": (reason or "")[:200],
         })
-        await self.db.commit()
 
-    async def _log_usage(self, user_id, session_id, provider_name, model_id, capability, result, config, is_free):
+    async def _log_usage(self, user_id, session_id, provider_name, model_id, capability, result, config, is_free,
+                         latency_ms: float = 0.0, fell_back_from: Optional[str] = None, task: Optional[str] = None):
         in_tok = getattr(result, "input_tokens", 0) or 0
         out_tok = getattr(result, "output_tokens", 0) or 0
-        
+
         est_cost = 0.0
         if not is_free:
             c_in = config.get("cost_per_1k_input", 0.0)
             c_out = config.get("cost_per_1k_output", 0.0)
             est_cost = (in_tok / 1000 * c_in) + (out_tok / 1000 * c_out)
-            
-        # Log to usage_events
-        query = text("""
-            INSERT INTO usage_events (user_id, session_id, provider, model, capability, input_tokens, output_tokens, estimated_cost_usd, was_free_tier)
-            VALUES (:uid, :sid, :prov, :mod, :cap, :in_tok, :out_tok, :cost, :free)
-        """)
-        await self.db.execute(query, {
-            "uid": user_id,
-            "sid": session_id,
-            "prov": provider_name,
-            "mod": model_id,
-            "cap": capability,
-            "in_tok": in_tok,
-            "out_tok": out_tok,
-            "cost": est_cost,
-            "free": is_free
+
+        logger.info("ai_call", extra={
+            "task": task, "provider": provider_name, "model": model_id, "method": capability,
+            "latency_ms": latency_ms, "input_tokens": in_tok, "output_tokens": out_tok,
+            "estimated_cost_usd": round(est_cost, 6), "fell_back_from": fell_back_from,
         })
-        await self.db.commit()
-        
+
+        profile_id = as_uuid_str(user_id)
+        if profile_id is not None:
+            query = text("""
+                INSERT INTO usage_events (profile_id, session_id, provider, model, capability, input_tokens,
+                                          output_tokens, estimated_cost_usd, was_free_tier, latency_ms,
+                                          fell_back_from, request_count)
+                VALUES (CAST(:uid AS uuid), CAST(:sid AS uuid), :prov, :mod, :cap, :in_tok, :out_tok, :cost,
+                        :free, :latency, :fell_back_from, 1)
+            """)
+            await safe_write(self.db, query, {
+                "uid": profile_id,
+                "sid": as_uuid_str(session_id),
+                "prov": provider_name,
+                "mod": model_id,
+                "cap": capability,
+                "in_tok": in_tok,
+                "out_tok": out_tok,
+                "cost": est_cost,
+                "free": is_free,
+                "latency": int(latency_ms),
+                "fell_back_from": fell_back_from,
+            }, what="usage_events")
+
         if not is_free and est_cost > 0:
             await self.budget_guard.commit_spend(user_id, session_id, est_cost)

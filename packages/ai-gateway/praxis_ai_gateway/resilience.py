@@ -63,17 +63,21 @@ class CircuitBreaker:
             await self.redis.set(self._key_state, "CLOSED")
             await self.redis.delete(self._key_failures)
             
-        # Postgres (provider_health)
+        # Postgres (provider_health) — best effort; never fails the call path.
+        from praxis_ai_gateway.persistence import safe_write
+        state = {"OPEN": "open", "CLOSED": "closed", "HALF_OPEN": "half_open"}.get(new_state, new_state.lower())
         query = text("""
-            INSERT INTO provider_health (provider_name, status, details)
-            VALUES (:provider, :status, :details)
+            INSERT INTO provider_health (provider, capability, state, last_failure_at, last_success_at, checked_at)
+            VALUES (:provider, :capability, :state,
+                    CASE WHEN :state = 'open' THEN now() END,
+                    CASE WHEN :state = 'closed' THEN now() END,
+                    now())
         """)
-        await self.db.execute(query, {
+        await safe_write(self.db, query, {
             "provider": self.provider_name,
-            "status": "degraded" if new_state == "OPEN" else "healthy",
-            "details": f"Circuit breaker transitioned to {new_state} for {self.capability}"
-        })
-        await self.db.commit()
+            "capability": self.capability,
+            "state": state,
+        }, what="provider_health")
 
     async def can_execute(self) -> bool:
         state = await self.get_state()
