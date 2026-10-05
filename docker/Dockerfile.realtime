@@ -1,0 +1,93 @@
+# syntax=docker/dockerfile:1.7
+# ── praxis-realtime production image ─────────────────────────────────────────
+# Build context: repository ROOT.
+#
+# IMPORTANT: This image is for the CLOUD RUN SERVER.
+# - Server receives audio bytes from Electron clients; it does NOT capture local audio.
+# - sounddevice, pyaudio, portaudio are NOT included (desktop-only).
+# - torch/torchaudio are included (required for silero-vad and STT inference).
+# - librosa is included (audio feature extraction for STT pipeline).
+# - onnxruntime is included (silero-vad ONNX backend).
+
+FROM python:3.11.11-slim AS deps
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libsndfile1-dev \
+    ffmpeg \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-lock.txt ./
+COPY packages/config/pyproject.toml packages/config/
+COPY packages/ai-gateway/pyproject.toml packages/ai-gateway/
+COPY realtime-agent/pyproject.toml realtime-agent/
+
+RUN python -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+
+# Install CPU-only torch first (avoids pulling CUDA, saves ~3 GB).
+RUN pip install --no-cache-dir --upgrade pip==24.3.1 && \
+    pip install --no-cache-dir \
+        torch==2.5.1+cpu \
+        torchaudio==2.5.1+cpu \
+        --index-url https://download.pytorch.org/whl/cpu
+
+# Install remaining deps excluding sounddevice (server does not capture audio).
+RUN pip install --no-cache-dir -r requirements-lock.txt && \
+    pip install --no-cache-dir \
+        faster-whisper==1.1.0 \
+        silero-vad==5.1.2 \
+        onnxruntime==1.20.1 \
+        librosa==0.10.2
+
+FROM deps AS source
+
+COPY packages/ packages/
+COPY realtime-agent/ realtime-agent/
+RUN pip install --no-cache-dir -e packages/config -e packages/ai-gateway -e realtime-agent
+
+COPY prompts/ prompts/
+# Pre-download models at build time so cold starts are fast.
+# Models are baked into the image layer — deterministic, no runtime downloads.
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('base.en', device='cpu', compute_type='int8')" || true
+RUN python -c "import silero_vad; silero_vad.load_silero_vad()" || true
+
+FROM python:3.11.11-slim AS production
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsndfile1 \
+    ffmpeg \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r praxis && useradd -r -g praxis praxis
+
+WORKDIR /app
+
+COPY --from=source /venv /venv
+COPY --from=source /build/packages /app/packages
+COPY --from=source /build/realtime-agent /app/realtime-agent
+COPY --from=source /build/prompts /app/prompts
+COPY --from=source /root/.cache /root/.cache
+
+ENV PATH="/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8080
+
+USER praxis
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD curl -fsS http://localhost:${PORT}/health || exit 1
+
+CMD ["sh", "-c", "uvicorn realtime_agent.app.main:app \
+    --host 0.0.0.0 \
+    --port ${PORT} \
+    --workers 1 \
+    --timeout-graceful-shutdown 30 \
+    --no-access-log"]
