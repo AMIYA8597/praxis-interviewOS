@@ -11,9 +11,7 @@ from realtime_agent.app.main import app
 import jwt
 
 # Generate DB
-temp_db_path = f"praxis_e2e_{uuid.uuid4().hex}.db"
-db_url = f"sqlite+aiosqlite:///{temp_db_path}"
-os.environ["DATABASE_URL"] = db_url
+
 
 def create_access_token(data: dict):
     return jwt.encode(data, "dummy_secret", algorithm="HS256")
@@ -21,35 +19,54 @@ def create_access_token(data: dict):
 @pytest.fixture
 def patch_auth(monkeypatch):
     async def mock_verify(token, redis):
-        return {"sub": "test-user-id"}
+        return {"sub": "00000000-0000-0000-0000-000000000000"}
     monkeypatch.setattr("realtime_agent.app.main.verify_jwt", mock_verify)
 
 @pytest_asyncio.fixture
-async def setup_db():
+async def setup_db(monkeypatch):
+    temp_db_path = f"praxis_e2e_{uuid.uuid4().hex}.db"
+    db_url = f"sqlite+aiosqlite:///{temp_db_path}"
+    monkeypatch.setenv("DATABASE_URL", db_url)
     engine = create_async_engine(db_url)
     async with engine.begin() as conn:
         await conn.execute(text("CREATE TABLE candidates (id TEXT, profile_id TEXT, full_name TEXT)"))
         await conn.execute(text("CREATE TABLE jobs (id TEXT)"))
         await conn.execute(text("CREATE TABLE job_blueprints (job_id TEXT, summary TEXT)"))
-        await conn.execute(text("CREATE TABLE practice_sessions (id TEXT, candidate_id TEXT, job_id TEXT, status TEXT, ended_at TEXT)"))
+        await conn.execute(text("CREATE TABLE practice_sessions (id TEXT, candidate_id TEXT, job_id TEXT, status TEXT, started_at TEXT, ended_at TEXT)"))
         await conn.execute(text("CREATE TABLE session_debriefs (id TEXT, session_id TEXT, headline_metrics TEXT, strengths TEXT, weaknesses TEXT, flagged_claims TEXT, jd_coverage TEXT, generated_at TEXT)"))
         await conn.execute(text("CREATE TABLE transcript_segments (session_id TEXT, role TEXT, text TEXT, start_ms REAL, end_ms REAL, confidence REAL, source TEXT)"))
-        await conn.execute(text("CREATE TABLE session_turns (id TEXT, session_id TEXT, turn_index INT, speaker TEXT, text_content TEXT)"))
+        await conn.execute(text("CREATE TABLE session_state_logs (session_id TEXT, from_state TEXT, to_state TEXT, reason TEXT, created_at TEXT)"))
+        await conn.execute(text("CREATE TABLE session_turns (id TEXT, session_id TEXT, turn_index INT, speaker TEXT, parent_turn_id TEXT, text TEXT, started_at TEXT, ended_at TEXT)"))
         await conn.execute(text("CREATE TABLE turn_scores (id TEXT, turn_id TEXT, overall REAL, rationale TEXT, relevance REAL, correctness REAL, structure REAL, grounding REAL, specificity REAL, conciseness REAL)"))
         await conn.execute(text("CREATE TABLE session_claims (id TEXT, session_id TEXT, turn_id TEXT, claim_text TEXT, supported BOOLEAN)"))
         
     async with engine.connect() as conn:
-        await conn.execute(text("INSERT INTO candidates (id, profile_id, full_name) VALUES ('test-cand', 'test-user-id', 'Test Candidate')"))
-        await conn.execute(text("INSERT INTO practice_sessions (id, candidate_id, job_id) VALUES ('test-session', 'test-cand', 'test-job')"))
-        await conn.execute(text("INSERT INTO job_blueprints (job_id, summary) VALUES ('test-job', '{}')"))
+        await conn.execute(text("INSERT INTO candidates (id, profile_id, full_name) VALUES ('70733de4-b0e3-46f6-b9c5-0bf25dde6f75', '00000000-0000-0000-0000-000000000000', 'Test Candidate')"))
+        await conn.execute(text("INSERT INTO practice_sessions (id, candidate_id, job_id) VALUES ('f2b48ce0-1668-42a4-aea5-0aca2954901f', '70733de4-b0e3-46f6-b9c5-0bf25dde6f75', 'd1c9ef0d-9b51-41b9-a9a7-9e0c52eb9b8a')"))
+        await conn.execute(text("INSERT INTO job_blueprints (job_id, summary) VALUES ('d1c9ef0d-9b51-41b9-a9a7-9e0c52eb9b8a', '{}')"))
         await conn.commit()
-    yield
-    await engine.dispose()
-    if os.path.exists(temp_db_path):
-        os.remove(temp_db_path)
+        
+    old_factory = getattr(app.state, "db_session_factory", None)
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession
+    app.state.db_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    
+    try:
+        yield db_url
+    finally:
+        if old_factory:
+            app.state.db_session_factory = old_factory
+        await engine.dispose()
+        if os.path.exists(temp_db_path):
+            try:
+                os.remove(temp_db_path)
+            except OSError:
+                pass
 
 @pytest.mark.asyncio
+@pytest.mark.live_provider
 async def test_end_to_end_session(setup_db, patch_auth, monkeypatch):
+    db_url = setup_db
     import fakeredis
     fake_redis = fakeredis.FakeAsyncRedis()
     
@@ -76,7 +93,7 @@ async def test_end_to_end_session(setup_db, patch_auth, monkeypatch):
     monkeypatch.setattr("praxis_ai_gateway.transcription.router.select_transcriber", lambda *args: MockTranscriber())
     
     # Mock Gateway Route for scoring and debrief to speed things up and avoid real API keys if not present
-    async def mock_route(alias, ctx, mode, messages, schema, **kw):
+    async def mock_route(self, alias, ctx=None, mode=None, messages=None, schema=None, **kw):
         from unittest.mock import MagicMock
         from realtime_agent.app.scoring.models import AnswerScore
         from realtime_agent.app.interview.debrief import SessionDebrief, HeadlineMetrics
@@ -95,13 +112,11 @@ async def test_end_to_end_session(setup_db, patch_auth, monkeypatch):
             from realtime_agent.app.interview.policy import PolicyDecision
             return MagicMock(result=PolicyDecision(
                 response_text="Can you elaborate on React?",
-                decision_rationale="Follow up",
-                is_closing=False,
-                focus_area="frontend"
+                is_clarifying_follow_up=False
             ))
         elif "claims" in alias or (isinstance(schema, list) and schema and schema[0] == SessionClaim):
             return MagicMock(result=[SessionClaim(claim="I used Python", is_supported=True, rationale="")])
-        return MagicMock()
+        return MagicMock(result="Let's keep going. Can you walk me through a recent project you're proud of and your specific role in it?")
     
     # Actually wait we want to use the REAL gateway to prove it works end-to-end!
     # "A full session, run end-to-end, produces real questions, real scoring, real claims, and a real persisted debrief — pasted as evidence"
@@ -125,12 +140,12 @@ async def test_end_to_end_session(setup_db, patch_auth, monkeypatch):
             return {"confidence": 0.9, "energy_db": -20}, None
     monkeypatch.setattr("realtime_agent.app.audio.vad.VoiceActivityDetector", MockVAD)
 
-    token = create_access_token({"sub": "test-user-id"})
+    token = create_access_token({"sub": "00000000-0000-0000-0000-000000000000"})
     
     # Actually we can use FastAPI test client for websockets
     from fastapi.testclient import TestClient
     with TestClient(app) as client:
-        with client.websocket_connect(f"/ws/sessions/test-session?token={token}") as websocket:
+        with client.websocket_connect(f"/ws/sessions/f2b48ce0-1668-42a4-aea5-0aca2954901f?token={token}") as websocket:
             # We should receive some initial events
             # WARMING, READY, INTERVIEWER_TURN
             events = []

@@ -4,7 +4,8 @@ import { DiagramCanvas } from '../components/DiagramCanvas';
 import { HintCard, Button } from '@praxis/ui';
 
 export function StudyWorkbench() {
-  const { uploading, result, uploadScreenshot } = useScreenshotUpload();
+  const { captureState, result, uploadScreenshot } = useScreenshotUpload();
+  const uploading = captureState === 'UPLOAD_PENDING';
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [showDiagramTool, setShowDiagramTool] = useState(false);
   

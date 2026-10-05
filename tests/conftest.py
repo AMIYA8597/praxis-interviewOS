@@ -10,7 +10,10 @@ from packages.config.settings import settings
 
 @pytest.fixture
 def db_conn():
-    conn = psycopg2.connect(settings.DATABASE_URL)
+    url = settings.DATABASE_URL
+    if not url.startswith("postgresql") and not url.startswith("postgres://"):
+        pytest.skip(f"db_conn requires a PostgreSQL URL; got {url!r}")
+    conn = psycopg2.connect(url)
     conn.autocommit = True
     yield conn
     conn.close()

@@ -37,6 +37,20 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
     session_factory = request.app.state.db_session_factory
     async with session_factory() as session:
         try:
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+                import jwt
+                try:
+                    payload = jwt.decode(token, options={"verify_signature": False})
+                    sub = payload.get("sub")
+                    if sub:
+                        import json
+                        from sqlalchemy import text
+                        claims_str = json.dumps({"sub": sub})
+                        await session.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims_str})
+                except Exception:
+                    pass
             yield session
         except Exception:
             await session.rollback()

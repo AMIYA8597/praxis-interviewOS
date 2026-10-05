@@ -11,7 +11,7 @@ async def generate_hint_ladder(classification: str, problem_statement: str, gate
     logger.info(f"Generating Hint Ladder for {classification} problem.")
     
     # 1. Load domain-specific prompt
-    # prompt = load_prompt(f"prompts/solving/{classification}.md")
+    # prompt = load_prompt(fstr(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/solving/{classification}.md")))
     
     # 2. Invoke Gateway with Structured Output constraint
     # provider = gateway_router.route("reasoning", routing_ctx)

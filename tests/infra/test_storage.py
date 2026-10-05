@@ -1,7 +1,5 @@
-import os
 import pytest
-import asyncio
-from backend.app.core.storage import LocalFileStorage, StorageError, get_storage_client
+from backend.app.core.storage import LocalFileStorage, StorageError
 
 pytestmark = pytest.mark.asyncio
 

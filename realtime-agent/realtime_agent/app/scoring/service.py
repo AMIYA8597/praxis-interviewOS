@@ -1,3 +1,4 @@
+from packages.config.settings import PROJECT_ROOT
 import asyncio
 import logging
 from typing import List, Optional
@@ -89,7 +90,7 @@ async def score_answer_async(
     grounding = await calculate_grounding_score(candidate_answer, verified_context, gateway_router, routing_ctx)
     
     # 2. Score other dimensions via LLM
-    with open("prompts/scoring/rubric_v1.md", "r") as f:
+    with open(str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/scoring/rubric_v1.md")), "r") as f:
         rubric_prompt = f.read()
         
     builder = PromptBuilder()

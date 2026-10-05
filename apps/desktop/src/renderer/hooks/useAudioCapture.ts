@@ -74,7 +74,8 @@ export function useAudioCapture(onAudioFrame?: (data: Float32Array) => void) {
       });
       
       mediaStreamRef.current = stream;
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioContextClass({ sampleRate: 16000 });
       audioContextRef.current = audioContext;
       
       const source = audioContext.createMediaStreamSource(stream);
@@ -97,7 +98,16 @@ export function useAudioCapture(onAudioFrame?: (data: Float32Array) => void) {
       await audioContext.audioWorklet.addModule(workletUrl);
       const processorNode = new AudioWorkletNode(audioContext, 'pcm-processor');
       processorNode.port.onmessage = (event) => {
-        onAudioFrame?.(event.data);
+        const float32Data = event.data as Float32Array;
+        onAudioFrame?.(float32Data);
+        
+        // Calculate RMS for local visualizer
+        let sumSquares = 0;
+        for (let i = 0; i < float32Data.length; i++) {
+          sumSquares += float32Data[i] * float32Data[i];
+        }
+        const rms = Math.sqrt(sumSquares / float32Data.length);
+        window.dispatchEvent(new CustomEvent('local-audio-level', { detail: { rms } }));
       };
       
       source.connect(processorNode);

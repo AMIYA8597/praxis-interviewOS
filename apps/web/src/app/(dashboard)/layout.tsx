@@ -13,22 +13,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     const checkAuth = async () => {
-      // Allow mock mode if no Supabase URL is set
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-        setIsLoading(false);
-        return;
-      }
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Auth error:", error);
+          router.push('/auth');
+          return;
+        }
+        if (!session) {
+          router.push('/auth');
+        } else {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error("Failed to check auth:", err);
         router.push('/auth');
-      } else {
-        setIsLoading(false);
       }
     };
     checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      if (!session) {
         router.push('/auth');
       }
     });
@@ -37,9 +42,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [router]);
 
   const handleSignOut = async () => {
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    try {
       await supabase.auth.signOut();
-    } else {
+    } finally {
       router.push('/auth');
     }
   };

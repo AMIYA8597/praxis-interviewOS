@@ -1,5 +1,6 @@
 import asyncio
 import time
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -10,6 +11,7 @@ from praxis_ai_gateway.chunking import chunk_text
 
 DB_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/interviewos"
 
+@pytest.mark.live_provider
 async def test_hybrid_retrieval():
     engine = create_async_engine(DB_URL)
     async with engine.begin() as conn:

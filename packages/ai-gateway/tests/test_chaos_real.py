@@ -1,4 +1,5 @@
 import pytest
+import uuid
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,22 +56,30 @@ async def test_mid_stream_fallback():
     db.commit = AsyncMock()
     
     router = GatewayRouter(registry=registry, providers={}, redis=redis, db=db)
-    
-    ctx = RoutingContext(user_id="user1")
+
+    # Spy on _log_fallback — streaming fallbacks log but don't write to DB
+    fallback_calls = []
+    original_log_fallback = router._log_fallback
+    async def spy_log_fallback(*args, **kwargs):
+        fallback_calls.append(args)
+        return await original_log_fallback(*args, **kwargs)
+    router._log_fallback = spy_log_fallback
+
+    ctx = RoutingContext(user_id=str(uuid.uuid4()))
     call = await router.route("test_task", ctx, "stream")
-    
+
     assert call.provider_name == "router_stream"
-    
+
     chunks = []
     async for chunk in call.result:
         chunks.append(chunk.text)
-        
+
     # We should get Prefix chunks from failing, and then Backup chunks
     text = "".join(chunks)
     assert text == "Prefix chunks Backup completes it."
-    
-    # Verify fallback was logged
-    assert db.execute.call_count > 0
+
+    # Verify fallback was logged (stream path logs via _log_fallback, not db.execute)
+    assert len(fallback_calls) > 0
 
 class MalformedStructuredProvider(LLMProvider):
     name = "malformed_provider"
@@ -111,7 +120,7 @@ async def test_structured_malformed_fallback():
     db.commit = AsyncMock()
     
     router = GatewayRouter(registry=registry, providers={}, redis=redis, db=db)
-    ctx = RoutingContext(user_id="user1")
+    ctx = RoutingContext(user_id=str(uuid.uuid4()))
     
     call = await router.route("test_task", ctx, "structured")
     

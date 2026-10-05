@@ -13,7 +13,9 @@ dependencies = [
     "httpx",
     "respx",
     "redis",
-    "SQLAlchemy"
+    "SQLAlchemy",
+    "tiktoken",
+    "sentence-transformers"
 ]
 
 [tool.setuptools.packages.find]

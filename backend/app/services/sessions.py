@@ -102,3 +102,4 @@ async def end_session(db: AsyncSession, arq_pool, session_id, candidate_id: str)
         arq_pool, "generate_session_debrief_job", str(session.id), job_id=f"debrief:{session.id}"
     )
     return SessionEndResponse(id=session.id, status=session.status, debrief_status="queued" if queued else "unavailable")
+

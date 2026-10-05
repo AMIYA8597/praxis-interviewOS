@@ -2,6 +2,7 @@ import pytest
 import fakeredis.aioredis
 from unittest.mock import AsyncMock
 import asyncio
+import uuid
 import yaml
 
 from praxis_ai_gateway.registry import ModelRegistry
@@ -53,7 +54,7 @@ async def test_gateway_failover(registry):
     providers = {"groq": groq, "ollama": ollama}
     router = GatewayRouter(registry, providers, redis, db)
 
-    context = RoutingContext(user_id="test")
+    context = RoutingContext(user_id=str(uuid.uuid4()))
     
     # 1. Groq is preferred (listed first). 
     # Force 5 consecutive failures by making 2 routed calls (each attempts 3 times due to retries).

@@ -12,7 +12,7 @@ def test_all_tables_have_rls_enabled(db_conn):
     cur = db_conn.cursor()
     
     cur.execute("""
-        SELECT c.relname, c.relrowsecurity
+        SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public' 
@@ -23,8 +23,13 @@ def test_all_tables_have_rls_enabled(db_conn):
     tables = cur.fetchall()
     
     missing_rls = []
-    for table_name, rls_enabled in tables:
-        if not rls_enabled and table_name not in RLS_EXCEPTIONS:
-            missing_rls.append(table_name)
+    missing_force = []
+    for table_name, rls_enabled, force_enabled in tables:
+        if table_name not in RLS_EXCEPTIONS:
+            if not rls_enabled:
+                missing_rls.append(table_name)
+            if not force_enabled:
+                missing_force.append(table_name)
             
     assert not missing_rls, f"FATAL: The following tables do NOT have RLS enabled: {missing_rls}. Enable RLS immediately."
+    assert not missing_force, f"FATAL: The following tables do NOT have FORCE ROW LEVEL SECURITY: {missing_force}. Force RLS immediately."

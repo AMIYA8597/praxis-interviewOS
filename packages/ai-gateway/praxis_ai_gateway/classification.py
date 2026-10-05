@@ -55,7 +55,8 @@ class FastClassifier:
     def __init__(self, router: GatewayRouter, redis_pool=None):
         self.router = router
         self.redis_pool = redis_pool
-        with open("prompts/classification/domain_v1.md", "r", encoding="utf-8") as f:
+        from packages.config.settings import PROJECT_ROOT
+        with open(str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/classification/domain_v1.md")), "r", encoding="utf-8") as f:
             self.prompt_template = f.read()
 
     async def classify(self, transcript: str, prior_context: str = "") -> QuestionClassification:

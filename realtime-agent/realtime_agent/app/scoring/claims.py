@@ -1,3 +1,4 @@
+from packages.config.settings import PROJECT_ROOT
 import logging
 import uuid
 from typing import List, Optional
@@ -34,7 +35,7 @@ async def extract_claims(answer_text: str, question_context: str, gateway_router
     """
     Task 1: Claim extraction from a candidate answer.
     """
-    with open("prompts/scoring/claim_extraction_v1.md", "r") as f:
+    with open(str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/scoring/claim_extraction_v1.md")), "r") as f:
         sys_prompt = f.read()
 
     builder = PromptBuilder()

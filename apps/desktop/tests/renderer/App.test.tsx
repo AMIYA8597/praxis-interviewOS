@@ -3,6 +3,18 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { App } from '../../src/renderer/App';
 import '@testing-library/jest-dom';
 
+// Mock supabase so auth.getSession returns a valid session without a real network call
+jest.mock('../../src/renderer/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: jest.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } }),
+      onAuthStateChange: jest.fn().mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } }),
+      signInWithPassword: jest.fn(),
+      signOut: jest.fn().mockResolvedValue({}),
+    },
+  },
+}));
+
 // Mock child components
 jest.mock('../../src/renderer/pages/PracticeArenaPage', () => ({
   PracticeArenaPage: () => <div data-testid="practice-page">Practice Arena</div>

@@ -126,6 +126,15 @@ jobs:
           exit 1
         fi
 
+    - name: Verify No Root Scripts
+      run: |
+        # conftest.py is a legitimate pytest root fixture; all other .py files are loose scripts
+        scripts=$(ls *.py 2>/dev/null | grep -v '^conftest\.py$' || true)
+        if [ -n "$scripts" ]; then
+          echo "::error::Loose .py scripts found in repository root: $scripts. Move them to scripts/ or delete them."
+          exit 1
+        fi
+
     - name: Run Boundary Checks
       run: |
         python scripts/check_gateway_boundary.py
@@ -150,16 +159,12 @@ jobs:
       run: |
         python -m pytest backend/tests/ -x -q -rs -m "not live_provider"
 
-    # RLS files already ran above. tests/infra/test_storage.py is excluded
-    # because it imports the removed backend.storage package (storage moved to
-    # backend.app.core.storage with a different API); it fails at collection
-    # and must be rewritten before it can be re-enabled.
+    # RLS files already ran above.
     - name: Run Remaining Python Tests
       run: |
         python -m pytest packages/ai-gateway/tests/ realtime-agent/tests/ tests/ -q -rs -m "not live_provider" \
           --ignore=tests/security/test_rls_enabled.py \
-          --ignore=tests/security/test_rls_isolation.py \
-          --ignore=tests/infra/test_storage.py
+          --ignore=tests/security/test_rls_isolation.py
 
   frontend-checks:
     runs-on: ubuntu-latest
@@ -181,7 +186,7 @@ jobs:
       run: pnpm install --frozen-lockfile
 
     - name: Run Frontend Tests
-      run: pnpm -r run test --if-present
+      run: pnpm -r --if-present run test
 
     - name: Frontend Typecheck
       run: |

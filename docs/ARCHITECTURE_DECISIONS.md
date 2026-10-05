@@ -50,7 +50,7 @@ We elected to use the **SuperMemo-2 (SM-2)** algorithm for our study review sche
 
 ## ADR-003: Defense in Depth — RLS is the Backstop, Not the Primary Access Control
 **Context:** Supabase's Row Level Security (RLS) policies are highly effective at scoping data access when the database connection is established with an authenticated user's JWT. However, application-level backend logic often needs to connect using the service_role key to execute complex background tasks or manage cross-user aggregations. The service_role explicitly bypasses all RLS policies.
-**Decision:** Every query built in the FastAPI routers MUST explicitly filter by the authenticated candidate_id at the application query level (e.g., .where(model.candidate_id == current_user.id)). We will never omit a WHERE clause under the assumption that "RLS will filter out the rest". 
+**Decision:** Every query built in the FastAPI routers MUST explicitly filter by the authenticated candidate_id at the application query level (e.g., .where(model.candidate_id == current_user.id)). We will never omit a WHERE clause under the assumption that "RLS will filter out the rest". However, we have now fully enforced RLS at the database level by ensuring the application runs as a non-superuser (praxis_app), setting transaction-local identity variables per-request, and applying FORCE ROW LEVEL SECURITY on all tenant tables, effectively guaranteeing that any omitted WHERE clauses will fail securely. 
 **Consequences:** 
 1. **Prevents catastrophic data leaks:** If an endpoint is inadvertently executed with elevated privileges or a service token, the explicit query boundaries ensure data from other users is not leaked.
 2. **Clarifies intent:** Reading the router logic makes the data access boundaries immediately obvious to other developers without having to jump into SQL migration files.
@@ -164,7 +164,7 @@ We elected to use the **SuperMemo-2 (SM-2)** algorithm for our study review sche
 
 ## ADR-003: Defense in Depth — RLS is the Backstop, Not the Primary Access Control
 **Context:** Supabase's Row Level Security (RLS) policies are highly effective at scoping data access when the database connection is established with an authenticated user's JWT. However, application-level backend logic often needs to connect using the service_role key to execute complex background tasks or manage cross-user aggregations. The service_role explicitly bypasses all RLS policies.
-**Decision:** Every query built in the FastAPI routers MUST explicitly filter by the authenticated candidate_id at the application query level (e.g., .where(model.candidate_id == current_user.id)). We will never omit a WHERE clause under the assumption that "RLS will filter out the rest". 
+**Decision:** Every query built in the FastAPI routers MUST explicitly filter by the authenticated candidate_id at the application query level (e.g., .where(model.candidate_id == current_user.id)). We will never omit a WHERE clause under the assumption that "RLS will filter out the rest". However, we have now fully enforced RLS at the database level by ensuring the application runs as a non-superuser (praxis_app), setting transaction-local identity variables per-request, and applying FORCE ROW LEVEL SECURITY on all tenant tables, effectively guaranteeing that any omitted WHERE clauses will fail securely. 
 **Consequences:** 
 1. **Prevents catastrophic data leaks:** If an endpoint is inadvertently executed with elevated privileges or a service token, the explicit query boundaries ensure data from other users is not leaked.
 2. **Clarifies intent:** Reading the router logic makes the data access boundaries immediately obvious to other developers without having to jump into SQL migration files.
@@ -323,6 +323,8 @@ We deleted the custom jitter buffer and sequence reordering logic in `transport.
 **Decision:** The migrations use "CREATE OR REPLACE FUNCTION", "CREATE SCHEMA IF NOT EXISTS", and "CREATE TABLE IF NOT EXISTS" for these primitives. This makes the migrations completely safe and idempotent for real-Supabase deployments. In a real Supabase environment, the existing Supabase schemas (auth, storage) will be untouched, and our mock auth.uid() definition uses dynamic current_setting, which avoids colliding with real Supabase internals if used correctly.
 **Migration Tool Choice:** When deploying to a real, hosted Supabase project, you must use `scripts/migrate.py` pointed at the real project's connection string via the `DATABASE_URL` environment variable. The hardcoded `postgresql://praxis:dev_password@localhost:5432/praxis` is strictly a local-fallback default.
 
+**Warning on Supabase CLI:** Do NOT use `supabase db push` or other CLI commands that key on the numeric prefix of migration files. We intentionally have duplicate numeric prefixes (e.g. `20260907235801` and `20260918000000`) because `scripts/migrate.py` keys on the full filename. Using the CLI will break or incorrectly skip migrations.
+
 **First-Time Real-Supabase Setup Checklist:**
 1. **Link the Project:** Use the Supabase CLI (`supabase link`) or fetch your real database connection string.
 2. **Verify Primitives:** Confirm the real Supabase `auth.uid()` and `authenticated` role exist. The idempotent migrations will not overwrite them.
@@ -358,3 +360,15 @@ Each run records two things:
 **Context:** When a user captures a screenshot for the hint ladder feature, we had to decide whether to perform local OCR on the client (desktop app) and send the extracted text, or send the raw image to the server for centralized OCR and multimodal processing.
 **Decision:** We chose Server-Side Extraction (Option A). The desktop app sends the raw base64 image data to the server (/study/screenshots/solve), and the server orchestrates the OCR extraction (un_local_ocr) alongside classification and deep reasoning.
 **Rationale:** Centralizing the OCR extraction pipeline on the server makes vision escalation strictly a server-level decision rather than shipping local heuristic branching rules in the desktop app. It allows us to upgrade extraction quality without asking users to redownload the application.
+
+## ADR-022: Database Schema Changes
+**Date:** 2026-10-04
+**Context:** Scripts like run_mig.py or add_reps.py were used to manually add columns or schemas out-of-band.
+**Decision:** Schema changes happen only in migration files applied by scripts/migrate.py. No exceptions. This ensures drift does not happen.
+## ADR-023: Non-Superuser Role & RLS Pooling Safety Guarantee
+**Date:** 2026-10-04
+**Context:** To enforce Defense in Depth (ADR-003), the application must not run as a Postgres superuser or table owner, as these bypass RLS policies. Additionally, connection pooling frameworks (like asyncpg via SQLAlchemy) reuse connections across different tenant requests, creating a risk that one tenant's identity state could bleed into the next request if not handled safely.
+**Decision:** 
+1. **Role Model:** The core API and realtime agent run strictly as the praxis_app role (NOSUPERUSER NOBYPASSRLS). This role does not own the schema.
+2. **Per-Request Identity:** For each request, the backend injects the authenticated candidate's JWT claim directly into the Postgres session via set_config('request.jwt.claims', '{"sub":"<user_id>"}', true).
+3. **Pooling Safety:** The third parameter (	rue) ensures the configuration is strictly transaction-local (SET LOCAL). When the transaction commits or rolls back before the connection is returned to the pool, Postgres automatically clears the identity state, guaranteeing no leakage across pooled requests.

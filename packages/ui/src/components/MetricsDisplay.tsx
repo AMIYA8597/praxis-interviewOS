@@ -21,76 +21,39 @@ export function MetricsDisplay({ metrics }: MetricsDisplayProps) {
     }
   };
 
+  const renderMetric = (label: string, value: number | null | undefined, unit: string, goodThreshold?: number, fairThreshold?: number, transform?: (v: number) => number | string) => {
+    if (value == null) {
+      return (
+        <div className="flex justify-between items-center">
+          <span className="text-gray-400">{label}</span>
+          <span className="font-mono text-lg text-gray-600 italic">Unavailable</span>
+        </div>
+      );
+    }
+    
+    const displayValue = transform ? transform(value) : value;
+    const colorClass = (goodThreshold !== undefined && fairThreshold !== undefined) 
+      ? getMetricColor(value, goodThreshold, fairThreshold) 
+      : 'text-gray-300';
+      
+    return (
+      <div className="flex justify-between items-center">
+        <span className="text-gray-400">{label}</span>
+        <span className={`font-mono text-lg ${colorClass}`}>
+          {displayValue}{unit}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-3 text-sm">
-      
-      {/* WPM (Words Per Minute) */}
-      <div className="flex justify-between items-center">
-        <span className="text-gray-400">WPM</span>
-        <span className={`font-mono text-lg ${getMetricColor(metrics.wpm || 0, 120, 80)}`}>
-          {metrics.wpm?.toFixed(0) || '—'}
-        </span>
-        <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-blue-500 transition-all"
-            style={{ width: `${Math.min((metrics.wpm || 0) / 200 * 100, 100)}%` }}
-          />
-        </div>
-      </div>
-
-      {/* FILLER RATE (% of words that are fillers) */}
-      <div className="flex justify-between items-center">
-        <span className="text-gray-400">Fillers</span>
-        <span className={`font-mono text-lg ${getMetricColor(100 - (metrics.filler_rate || 0) * 100, 95, 85)}`}>
-          {(((1 - (metrics.filler_rate || 0)) * 100).toFixed(0))}%
-        </span>
-        <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-purple-500 transition-all"
-            style={{ width: `${(1 - (metrics.filler_rate || 0)) * 100}%` }}
-          />
-        </div>
-      </div>
-
-      {/* LONGEST PAUSE */}
-      <div className="flex justify-between items-center">
-        <span className="text-gray-400">Max Pause</span>
-        <span className={`font-mono text-lg ${getMetricColor(3000 - (metrics.longest_pause_ms || 0), 1500, 500)}`}>
-          {((metrics.longest_pause_ms || 0) / 1000).toFixed(1)}s
-        </span>
-        <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-orange-500 transition-all"
-            style={{ width: `${Math.min((metrics.longest_pause_ms || 0) / 3000 * 100, 100)}%` }}
-          />
-        </div>
-      </div>
-
-      {/* HEDGE COUNT */}
-      <div className="flex justify-between items-center">
-        <span className="text-gray-400">Hedges</span>
-        <span className={`font-mono text-lg ${getMetricColor(metrics.hedge_count || 0, 1, 3)}`}>
-          {metrics.hedge_count || 0}
-          <span className="text-xs text-gray-500 ml-1">(lower is better)</span>
-        </span>
-      </div>
-
-      {/* AVERAGE SENTENCE LENGTH */}
-      <div className="flex justify-between items-center">
-        <span className="text-gray-400">Avg Sentence</span>
-        <span className={`font-mono text-lg ${getMetricColor(metrics.avg_sentence_length || 0, 20, 10)}`}>
-          {metrics.avg_sentence_length?.toFixed(1) || '—'} words
-        </span>
-      </div>
-
-      {/* SENTENCE COUNT */}
-      <div className="flex justify-between items-center">
-        <span className="text-gray-400">Sentences</span>
-        <span className="font-mono text-lg text-gray-300">
-          {metrics.sentence_count || 0}
-        </span>
-      </div>
-
+      {renderMetric("WPM", metrics.wpm, "", 120, 80, v => v.toFixed(0))}
+      {renderMetric("Fillers", metrics.filler_rate, "%", 0.05, 0.15, v => (v * 100).toFixed(0))}
+      {renderMetric("Max Pause", metrics.longest_pause_ms, "s", 1500, 3000, v => (v / 1000).toFixed(1))}
+      {renderMetric("Hedges", metrics.hedge_count, "", 1, 3)}
+      {renderMetric("Avg Sentence", metrics.avg_sentence_length, " words", 20, 10, v => v.toFixed(1))}
+      {renderMetric("Sentences", metrics.sentence_count, "")}
     </div>
   );
 }

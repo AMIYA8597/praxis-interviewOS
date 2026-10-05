@@ -1,27 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { PracticeArenaPage } from './pages/PracticeArenaPage';
 import { StudyWorkbench } from './pages/StudyWorkbench';
+import { supabase } from './lib/supabase';
 
 type ScreenState = 
   | { screen: 'loading' }
   | { screen: 'auth' }
   | { screen: 'dashboard' }
-  | { screen: 'practice'; sessionId: string }
+  | { screen: 'practice' }
   | { screen: 'study-workbench' };
 
 export function App() {
   const [state, setState] = useState<ScreenState>({ screen: 'loading' });
 
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+
   useEffect(() => {
-    // Check auth token via IPC storage
+    // Check auth token via Supabase client
     const initAuth = async () => {
       try {
-        const token = await window.electronAPI.storageGet('auth-token');
-        if (token) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
           setState({ screen: 'dashboard' });
         } else {
-          // Default to dashboard for now if mock mode, or auth if strictly required. 
-          // Let's assume we require auth, but we can bypass it in UI.
           setState({ screen: 'auth' });
         }
       } catch (e) {
@@ -31,10 +34,20 @@ export function App() {
     initAuth();
   }, []);
 
-  const handleLogin = async () => {
-    // Mock login for desktop
-    await window.electronAPI.storageSet('auth-token', 'mock-token');
-    setState({ screen: 'dashboard' });
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    const supabaseUrl = typeof process !== 'undefined' && process.env.VITE_SUPABASE_URL ? process.env.VITE_SUPABASE_URL : undefined;
+    if (!supabaseUrl || supabaseUrl === 'missing') {
+      setAuthError('Supabase is not configured. Authentication unavailable.');
+      return;
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setAuthError(error.message);
+    } else if (data.session) {
+      setState({ screen: 'dashboard' });
+    }
   };
 
   if (state.screen === 'loading') {
@@ -50,12 +63,31 @@ export function App() {
       <div className="flex h-screen items-center justify-center bg-gray-950 text-gray-100">
         <div className="bg-gray-900 p-8 rounded border border-gray-800 flex flex-col items-center">
           <h1 className="text-2xl font-bold mb-6 tracking-widest uppercase">PRAXIS DESKTOP</h1>
-          <button 
-            onClick={handleLogin}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded transition"
-          >
-            Sign In
-          </button>
+          <form onSubmit={handleLogin} className="flex flex-col gap-4 w-full">
+            <input 
+              type="email" 
+              placeholder="Email" 
+              className="p-2 bg-neutral-800 border border-neutral-700 rounded text-white" 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              required 
+            />
+            <input 
+              type="password" 
+              placeholder="Password" 
+              className="p-2 bg-neutral-800 border border-neutral-700 rounded text-white" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              required 
+            />
+            <button 
+              type="submit"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded transition"
+            >
+              Sign In
+            </button>
+          </form>
+          {authError && <p className="mt-4 text-sm text-red-500">{authError}</p>}
         </div>
       </div>
     );
@@ -73,7 +105,7 @@ export function App() {
         <nav className="flex-1 p-4 space-y-2">
           <button 
             className={`w-full text-left px-3 py-2 rounded text-sm font-medium transition-colors ${state.screen === 'practice' ? 'bg-indigo-900/50 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}
-            onClick={() => setState({ screen: 'practice', sessionId: 'mock-session-id' })}
+            onClick={() => setState({ screen: 'practice' })}
           >
             Practice Arena
           </button>
@@ -87,7 +119,7 @@ export function App() {
         <div className="p-4 border-t border-gray-800">
           <button
             onClick={async () => {
-              await window.electronAPI.authLogout();
+              await supabase.auth.signOut();
               setState({ screen: 'auth' });
             }}
             className="w-full text-left px-3 py-2 rounded text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"

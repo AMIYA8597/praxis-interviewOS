@@ -1,3 +1,4 @@
+from packages.config.settings import PROJECT_ROOT
 import logging
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
@@ -85,7 +86,7 @@ class InterviewSession:
         self.is_warmed_up = False
         
         # Load the core interviewer system prompt
-        with open("prompts/interviewer/system_v1.md", "r") as f:
+        with open(str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/interviewer/system_v1.md")), "r") as f:
             self.system_prompt = f.read()
 
     def warm_up(self):
@@ -98,22 +99,47 @@ class InterviewSession:
             
         logger.info("Warming up Interview Session context...")
         
-        # Candidate Context
+        # Phase 9: Real Candidate Context
+        # Verified Candidate Facts
         summary = self.candidate_profile.get("summary", "")
         skills = ", ".join(self.candidate_profile.get("verified_skills", []))
+        technologies = ", ".join(self.candidate_profile.get("technologies", []))
         
-        # Only verified projects
+        # Projects & Experience
         projects = self.candidate_profile.get("projects", [])
-        verified_projects = [p for p in projects if p.get("verified_by_user", False)]
-        proj_str = "\n".join([f"- {p['name']}: {p['description']}" for p in verified_projects])
+        verified_projects = [p for p in projects if p.get("verified_by_user", False) or p.get("status") == "VERIFIED"]
+        work_exp = self.candidate_profile.get("work_experience", [])
+        
+        proj_str = "\n".join([f"- {p.get('name')}: {p.get('description')}" for p in verified_projects])
+        work_str = "\n".join([f"- {w.get('role')} at {w.get('company')} ({w.get('duration')}): {w.get('details')}" for w in work_exp])
+        
+        # Claim Verification & Provenance (Phase 9/10 Context)
+        claims = self.candidate_profile.get("claims", [])
+        verified_claims = [c for c in claims if c.get("classification") in ("Supported", "Partially Supported")]
+        uncertain_claims = [c for c in claims if c.get("classification") in ("Uncertain", "Unsupported", "Contradicted")]
+        
+        verified_claims_str = "\n".join([f"- {c.get('claim_text')} [EVIDENCE: {c.get('evidence')}]" for c in verified_claims])
+        uncertain_claims_str = "\n".join([f"- CLAIMED: {c.get('claim_text')} -> {c.get('classification')} [EXPLANATION: {c.get('explanation')}]" for c in uncertain_claims])
         
         # JD Context
+        target_role = self.jd_blueprint.get("target_role", "Unknown Role")
+        jd_requirements = self.jd_blueprint.get("requirements", [])
+        req_str = "\n".join([f"- {r}" for r in jd_requirements])
         self.prep_pack = self.jd_blueprint.get("prep_pack", [])
         
         self.cached_context = (
-            f"Candidate Summary: {summary}\n"
+            f"=== TARGET ROLE ===\n"
+            f"Role: {target_role}\n"
+            f"Job Requirements:\n{req_str}\n\n"
+            f"=== VERIFIED CANDIDATE FACTS (AUTHORITATIVE) ===\n"
+            f"Summary: {summary}\n"
             f"Verified Skills: {skills}\n"
-            f"Verified Projects:\n{proj_str}\n"
+            f"Technologies: {technologies}\n"
+            f"Work Experience:\n{work_str}\n"
+            f"Verified Projects:\n{proj_str}\n\n"
+            f"=== RESUME TRUTH & CLAIMS ===\n"
+            f"WHAT THE RESUME ACTUALLY SUPPORTS:\n{verified_claims_str}\n\n"
+            f"WHAT THE CANDIDATE CLAIMED BUT IS UNCERTAIN/CONTRADICTED:\n{uncertain_claims_str}\n\n"
             f"Interview Setup: {self.interview_type} interview, {self.difficulty} difficulty."
         )
         self.is_warmed_up = True

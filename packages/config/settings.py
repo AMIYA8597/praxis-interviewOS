@@ -1,3 +1,5 @@
+import pathlib
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 """
 Central, typed configuration for every PRAXIS Python service.
 
@@ -15,7 +17,6 @@ _DEV_ENVS = {"development", "dev", "local", "test", "testing", "ci"}
 
 
 class Settings(BaseSettings):
-    # ── Core ────────────────────────────────────────────────────────────
     APP_ENV: str = "development"
     ZERO_SPEND_MODE: bool = True
     LOCAL_ONLY_MODE: bool = True
@@ -23,7 +24,6 @@ class Settings(BaseSettings):
     # "json" for log aggregation (default outside development), "text" for humans.
     LOG_FORMAT: Optional[str] = None
 
-    # ── Database ────────────────────────────────────────────────────────
     DATABASE_URL: str = Field(
         "postgresql://praxis:dev_password@localhost:5432/praxis",
         description="Postgres connection string (postgresql:// or postgresql+asyncpg://)",
@@ -36,7 +36,6 @@ class Settings(BaseSettings):
     DB_ECHO: bool = False
     DB_STATEMENT_TIMEOUT_MS: int = Field(15000, ge=0)
 
-    # ── Supabase / Auth ─────────────────────────────────────────────────
     SUPABASE_URL: Optional[str] = None
     SUPABASE_ANON_KEY: Optional[str] = None
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
@@ -56,7 +55,6 @@ class Settings(BaseSettings):
     AUTH_DEV_USER_ID: str = "00000000-0000-0000-0000-000000000000"
     CANDIDATE_CACHE_TTL_S: int = Field(900, ge=0)
 
-    # ── HTTP ────────────────────────────────────────────────────────────
     # Comma-separated list. "*" is rejected in production.
     CORS_ALLOW_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
     CORS_ALLOW_CREDENTIALS: bool = True
@@ -65,7 +63,6 @@ class Settings(BaseSettings):
     ENABLE_RATE_LIMIT: bool = True
     TRUSTED_PROXY_COUNT: int = Field(0, ge=0)
 
-    # ── Redis / Queue ───────────────────────────────────────────────────
     REDIS_URL: str = Field("redis://localhost:6379/0", description="Redis connection string")
     REDIS_MAX_CONNECTIONS: int = Field(10, ge=1)
     REDIS_SOCKET_TIMEOUT_S: float = Field(5.0, gt=0)
@@ -75,24 +72,20 @@ class Settings(BaseSettings):
     WORKER_JOB_TIMEOUT_S: int = Field(300, ge=1)
     WORKER_MAX_TRIES: int = Field(3, ge=1)
 
-    # ── Storage / Uploads ───────────────────────────────────────────────
     STORAGE_BACKEND: str = Field("local", description="local or supabase")
     STORAGE_LOCAL_PATH: str = "./storage"
     STORAGE_BUCKET: str = "documents"
     MAX_UPLOAD_BYTES: int = Field(10 * 1024 * 1024, ge=1024)
 
-    # ── AI ──────────────────────────────────────────────────────────────
-    MODELS_CONFIG_PATH: str = "config/models.yaml"
+    MODELS_CONFIG_PATH: str = str(PROJECT_ROOT / "config/models.yaml")
     EMBEDDING_DIM: int = 384
 
-    # ── Realtime ────────────────────────────────────────────────────────
     WS_AUTH_TIMEOUT_S: float = Field(10.0, gt=0)
     WS_RECONNECT_GRACE_S: int = Field(30, ge=1)
     # Silence after a question before the interviewer nudges / moves on.
     TURN_NO_ANSWER_TIMEOUT_S: float = Field(20.0, gt=0)
     TURN_MAX_NUDGES: int = Field(1, ge=0)
 
-    # ── Observability ───────────────────────────────────────────────────
     # When unset, tracing is enabled only if an endpoint was set explicitly.
     OTEL_ENABLED: Optional[bool] = None
     OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://localhost:4318/v1/traces"
@@ -105,7 +98,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ── Normalisers ─────────────────────────────────────────────────────
     @field_validator("APP_ENV")
     @classmethod
     def _normalise_env(cls, v: str) -> str:
@@ -116,7 +108,6 @@ class Settings(BaseSettings):
     def _strip_trailing_slash(cls, v: Optional[str]) -> Optional[str]:
         return v.rstrip("/") if v else v
 
-    # ── Derived values ──────────────────────────────────────────────────
     @property
     def is_production(self) -> bool:
         return self.APP_ENV in {"production", "prod"}
@@ -183,7 +174,6 @@ class Settings(BaseSettings):
             return self.LOG_FORMAT.lower()
         return "text" if self.is_development else "json"
 
-    # ── Validation ──────────────────────────────────────────────────────
     @model_validator(mode="after")
     def validate_storage_backend(self) -> "Settings":
         if self.STORAGE_BACKEND.lower() == "supabase":
@@ -234,3 +224,8 @@ except Exception as e:  # pragma: no cover - exercised only on misconfiguration
 
     print(f"FATAL: Configuration failed to load: {e}", file=sys.stderr)
     raise
+
+
+
+
+

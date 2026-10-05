@@ -11,6 +11,9 @@ from praxis_ai_gateway.router import GatewayRouter, RoutingContext
 async def test_begin_interviewer_turn():
     # 1. Setup mocks
     mock_sm = MagicMock(spec=SessionManager)
+    mock_sm.session_id = "test-session-id"
+    mock_sm.db = AsyncMock()
+    mock_sm.db.execute = AsyncMock(return_value=MagicMock(scalar=MagicMock(return_value=0)))
     mock_sm.transition = AsyncMock()
 
     mock_policy = MagicMock(spec=InterviewSession)

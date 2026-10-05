@@ -32,7 +32,8 @@ def compute_filler_rate(text: str, filler_list: Set[str]) -> Dict[str, Any]:
     text_lower = text.lower()
     breakdown = {filler: 0 for filler in filler_list}
     total = 0
-    padded_text = f" {re.sub(r'[^\w\s]', ' ', text_lower)} "
+    cleaned = re.sub(r'[^\w\s]', ' ', text_lower)
+    padded_text = f" {cleaned} "
     for filler in filler_list:
         count = padded_text.count(f" {filler} ")
         if count > 0:
@@ -53,7 +54,8 @@ def compute_pause_stats(vad_silence_gaps: List[int], turn_duration_ms: int) -> D
 
 def compute_hedge_count(text: str, hedge_list: Set[str]) -> int:
     text_lower = text.lower()
-    padded_text = f" {re.sub(r'[^\w\s]', ' ', text_lower)} "
+    cleaned = re.sub(r'[^\w\s]', ' ', text_lower)
+    padded_text = f" {cleaned} "
     count = 0
     for hedge in hedge_list:
         count += padded_text.count(f" {hedge} ")

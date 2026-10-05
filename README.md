@@ -1,8 +1,19 @@
-﻿# PRAXIS (InterviewOS)
+# PRAXIS (InterviewOS)
+
+[![CI Status](https://github.com/AMIYA8597/praxis-interviewOS/actions/workflows/ci.yml/badge.svg)](https://github.com/AMIYA8597/praxis-interviewOS/actions)
 
 A realtime, multimodal AI interview coaching & candidate intelligence platform.
 
 PRAXIS is a massive, multi-process application designed to simulate live technical interviews. It enforces a strict separation of concerns, decoupling the stateless REST core from the low-latency stateful WebSocket engine, and separates the Next.js web dashboard from the Electron desktop practice arena.
+
+---
+
+## CI Enforcement & Security Guarantees
+Our CI pipeline (`.github/workflows/ci.yml`) strictly enforces architectural and security boundaries on every commit:
+- **Defense-in-Depth RLS:** Asserts that every single tenant-scoped table has `FORCE ROW LEVEL SECURITY` natively enabled.
+- **Path Traversal Security:** Runs isolation tests to prevent any storage paths from escaping the `/resumes/` boundary.
+- **Root Graveyard Guard:** Checks the root directory for orphaned/loose `.py` scratch scripts and halts the build if any are found, enforcing strict folder hygiene.
+- **Idempotency Checks:** Evaluates `scripts/migrate.py` cross-checking the `schema_migrations` tracking table.
 
 ---
 
