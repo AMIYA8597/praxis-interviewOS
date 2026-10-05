@@ -67,7 +67,7 @@ async def e2e_db(monkeypatch):
     async with engine.connect() as conn:
         await conn.execute(text(f"INSERT INTO candidates VALUES ('{_CANDIDATE_ID}', '{_USER_ID}', 'Test Candidate')"))
         await conn.execute(text(f"INSERT INTO practice_sessions (id, candidate_id, job_id) VALUES ('{_SESSION_ID}', '{_CANDIDATE_ID}', '{_JOB_ID}')"))
-        await conn.execute(text(f"INSERT INTO job_blueprints VALUES ('{_JOB_ID}', '{{\"requirements\": [\"Python\", \"React\"]}}')"))
+        await conn.execute(text(f"INSERT INTO job_blueprints VALUES ('{_JOB_ID}', '{{\"requirements\": [\"Python\", \"React\"]}}', '[]', '[]')"))
         await conn.commit()
 
     app.state.db_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
