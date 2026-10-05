@@ -46,6 +46,9 @@ async def acceptance_db():
             "CREATE TABLE turn_scores (id TEXT PRIMARY KEY, turn_id TEXT, overall REAL, correctness REAL, grounding REAL, structure REAL, specificity REAL, conciseness REAL, rationale TEXT)",
             "CREATE TABLE candidate_topic_facts (id TEXT PRIMARY KEY, candidate_id TEXT, domain_code TEXT, sessions_practiced INT DEFAULT 0, questions_answered INT DEFAULT 0, correct_count INT DEFAULT 0, weak_count INT DEFAULT 0, avg_correctness REAL, avg_grounding REAL, avg_structure REAL, last_practiced_at TEXT, mastery_status TEXT DEFAULT 'unknown', mastery_updated_at TEXT, sm2_interval_days INT DEFAULT 1, sm2_ease_factor REAL DEFAULT 2.5, sm2_repetitions INT DEFAULT 0, next_review_at TEXT, created_at TEXT, updated_at TEXT, UNIQUE(candidate_id, domain_code))",
             "CREATE TABLE candidate_inferences (id TEXT PRIMARY KEY, candidate_id TEXT, domain_code TEXT, inference_type TEXT, inference_text TEXT, evidence_json TEXT DEFAULT '{}', confidence TEXT DEFAULT 'low', generated_at TEXT, invalidated_at TEXT)",
+            "CREATE TABLE candidate_interview_profile (id TEXT PRIMARY KEY, candidate_id TEXT UNIQUE, dsa_score REAL, backend_score REAL, databases_score REAL, distributed_score REAL, system_design_score REAL, behavioral_score REAL, communication_score REAL, grounding_score REAL, verified_claims_count INT DEFAULT 0, uncertain_claims_count INT DEFAULT 0, total_sessions INT DEFAULT 0, profile_version INT DEFAULT 1, computed_at TEXT)",
+            "CREATE TABLE session_claims (id TEXT, session_id TEXT, turn_id TEXT, claim_text TEXT, supported BOOLEAN)",
+            "CREATE TABLE candidate_communication_profile (id TEXT PRIMARY KEY, candidate_id TEXT UNIQUE, avg_structure_score REAL, sessions_counted INT DEFAULT 0)",
         ]:
             await conn.execute(text(stmt))
 

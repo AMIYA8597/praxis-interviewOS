@@ -1,7 +1,7 @@
 import asyncio
 import pathlib
 
-_PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[5]
+_PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[4]
 import logging
 from typing import List, Optional
 from pydantic import BaseModel, Field

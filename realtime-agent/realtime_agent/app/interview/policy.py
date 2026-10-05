@@ -1,7 +1,7 @@
 import logging
 import pathlib
 
-_PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[5]
+_PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[4]
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 
