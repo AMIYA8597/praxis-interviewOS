@@ -1,11 +1,6 @@
-import asyncio
-import uuid
 import pytest
-from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.pool import QueuePool
 
-from backend.app.main import app
 from packages.config.settings import settings
 
 pytestmark = pytest.mark.asyncio
