@@ -9,6 +9,8 @@
 .env.*
 !.env.example
 !.env.local.example
+!.env.staging.example
+!.env.production.example
 
 # Local environment files
 .env.local
@@ -239,6 +241,13 @@ temp/
 Thumbs.db
 desktop.ini
 
+
+# ------------------------------------------------------------
+# Terraform
+# ------------------------------------------------------------
+**/.terraform/
+*.tfstate
+*.tfstate.backup
 
 # ------------------------------------------------------------
 # ESLint / Tool Caches

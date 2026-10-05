@@ -1,16 +1,11 @@
 ################################################################################
-# Phase 111 — Production Alerting
+# PRAXIS — Alerting
 # All alerts are actionable. Thresholds tuned to avoid alert fatigue.
+# alert_notification_channel and alert_channels locals are defined in main.tf.
 ################################################################################
 
-variable "alert_notification_channel" {
-  description = "Google Cloud Monitoring notification channel ID for alerts"
-  type        = string
-  default     = ""
-}
-
 locals {
-  channels = var.alert_notification_channel != "" ? [var.alert_notification_channel] : []
+  channels = local.alert_channels
 }
 
 # ── API 5xx spike ─────────────────────────────────────────────────────────────
@@ -49,7 +44,7 @@ resource "google_monitoring_alert_policy" "api_latency" {
       filter          = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"praxis-api\" AND metric.type=\"run.googleapis.com/request_latencies\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
-      threshold_value = 3000  # ms
+      threshold_value = 3000 # ms
       aggregations {
         alignment_period     = "60s"
         per_series_aligner   = "ALIGN_DELTA"
