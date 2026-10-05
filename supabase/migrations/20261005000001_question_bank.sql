@@ -108,11 +108,15 @@ CREATE TABLE IF NOT EXISTS preparation_plans (
   UNIQUE (candidate_id, job_id)
 );
 
--- Enable RLS
+-- Enable RLS + force it (so superuser connections are also bound by policies)
 ALTER TABLE interview_domains   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interview_domains   FORCE ROW LEVEL SECURITY;
 ALTER TABLE question_bank       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE question_bank       FORCE ROW LEVEL SECURITY;
 ALTER TABLE candidate_readiness ENABLE ROW LEVEL SECURITY;
+ALTER TABLE candidate_readiness FORCE ROW LEVEL SECURITY;
 ALTER TABLE preparation_plans   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE preparation_plans   FORCE ROW LEVEL SECURITY;
 
 -- interview_domains and question_bank are read-only for all authenticated users
 CREATE POLICY "authenticated_read_domains"
