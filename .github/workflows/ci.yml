@@ -139,6 +139,7 @@ jobs:
       run: |
         python scripts/check_gateway_boundary.py
         python scripts/check_prompt_construction_boundary.py
+        python scripts/check_no_fake_data.py
 
     - name: Run Ruff
       run: |

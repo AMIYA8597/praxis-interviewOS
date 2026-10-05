@@ -126,8 +126,8 @@ async def score_answer_async(
         llm_score = call_result.result
     except Exception as e:
         logger.error(f"LLM Scoring failed: {e}")
-        llm_score = LlmScoringResult(
-            relevance=0.5, correctness=0.5, structure=0.5, specificity=0.5, conciseness=0.5,
+        llm_score = LlmScoringResult(  # fallback: LLM unavailable
+            relevance=0.5, correctness=0.5, structure=0.5, specificity=0.5, conciseness=0.5,  # fallback
             rationale="Scoring failed fallback."
         )
         
@@ -199,16 +199,16 @@ async def score_system_design_async(
         result = call_result.result
     except Exception as e:
         logger.error(f"System design scoring failed: {e}")
-        result = _SdResult(
-            requirements_clarification=0.5,
-            high_level_design=0.5,
-            scalability=0.5,
-            data_modeling=0.5,
-            api_design=0.5,
-            bottleneck_identification=0.5,
-            trade_off_reasoning=0.5,
-            communication=0.5,
-            overall=0.5,
+        result = _SdResult(  # fallback: LLM unavailable
+            requirements_clarification=0.5,  # fallback
+            high_level_design=0.5,  # fallback
+            scalability=0.5,  # fallback
+            data_modeling=0.5,  # fallback
+            api_design=0.5,  # fallback
+            bottleneck_identification=0.5,  # fallback
+            trade_off_reasoning=0.5,  # fallback
+            communication=0.5,  # fallback
+            overall=0.5,  # fallback
             rationale="Scoring failed — fallback values.",
         )
 
