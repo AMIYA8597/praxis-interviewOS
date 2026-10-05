@@ -21,6 +21,7 @@ from backend.app.api.questions import router as questions_router
 from backend.app.api.readiness import router as readiness_router
 from backend.app.api.memory import router as memory_router
 from backend.app.api.preparation import router as preparation_router
+from backend.app.api.interview_engines import router as interview_engines_router
 from backend.app.core.bootstrap import build_gateway, configure_logging, configure_tracing
 from backend.app.core.context import request_id_context  # noqa: F401  (re-exported for older imports)
 from backend.app.core.queue import create_arq_pool
@@ -122,6 +123,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
         readiness_router,
         memory_router,
         preparation_router,
+        interview_engines_router,
         outreach_router,
         applications_router,
         analytics_router,
