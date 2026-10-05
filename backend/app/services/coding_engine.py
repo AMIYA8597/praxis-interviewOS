@@ -181,15 +181,21 @@ async def run_code_against_tests(
         "verdict": verdict, "now": now,
     })
 
-    # Update coding_session_state
+    # Upsert coding_session_state (creates row on first run, increments on subsequent runs)
     await db.execute(text("""
-        UPDATE coding_session_state SET
-          current_code = :code, test_runs = test_runs + 1,
-          tests_passed = :passed, tests_total = :total, last_run_at = :now
-        WHERE session_id = :sid
+        INSERT INTO coding_session_state
+          (session_id, language, current_code, test_runs, tests_passed, tests_total, last_run_at)
+        VALUES (:sid, :lang, :code, 1, :passed, :total, :now)
+        ON CONFLICT (session_id) DO UPDATE SET
+          current_code = EXCLUDED.current_code,
+          test_runs    = coding_session_state.test_runs + 1,
+          tests_passed = EXCLUDED.tests_passed,
+          tests_total  = EXCLUDED.tests_total,
+          last_run_at  = EXCLUDED.last_run_at
     """), {
+        "sid": session_id, "lang": language,
         "code": code[:50000], "passed": passed,
-        "total": len(test_cases), "now": now, "sid": session_id,
+        "total": len(test_cases), "now": now,
     })
 
     await db.commit()

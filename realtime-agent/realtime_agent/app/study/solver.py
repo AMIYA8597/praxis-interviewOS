@@ -35,16 +35,16 @@ async def generate_hint_ladder(extracted_text: str, screenshot_type: ScreenshotT
     """
     Task 3 & 4: The Hint-Ladder Structure and Per-Type Prompts.
     """
-    prompt_file = str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/solving/coding_v1.md"))
+    prompt_file = PROJECT_ROOT / "prompts/solving/coding_v1.md"
     if screenshot_type == ScreenshotType.sql:
-        prompt_file = str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/solving/sql_v1.md"))
+        prompt_file = PROJECT_ROOT / "prompts/solving/sql_v1.md"
     elif screenshot_type == ScreenshotType.system_design_diagram:
-        prompt_file = str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/solving/system_design_v1.md"))
+        prompt_file = PROJECT_ROOT / "prompts/solving/system_design_v1.md"
     elif screenshot_type == ScreenshotType.ml_chart:
-        prompt_file = str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/solving/ml_v1.md"))
+        prompt_file = PROJECT_ROOT / "prompts/solving/ml_v1.md"
     # Fallback to coding for general
     
-    with open(prompt_file, "r") as f:
+    with open(str(prompt_file), "r") as f:
         sys_prompt = f.read()
         
     builder = PromptBuilder()

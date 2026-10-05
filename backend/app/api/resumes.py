@@ -4,7 +4,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.dependencies import get_arq_pool, get_current_candidate, get_db_session, get_object_storage
+from pydantic import BaseModel
+
+from backend.app.dependencies import get_ai_gateway, get_arq_pool, get_current_candidate, get_db_session, get_object_storage
 from backend.app.schemas.common import COMMON_ERROR_RESPONSES, ErrorResponse, PaginatedResponse
 from backend.app.schemas.resume import (
     ResumeFactResponse,
@@ -14,6 +16,7 @@ from backend.app.schemas.resume import (
     ResumeUploadResponse,
 )
 from backend.app.services import resumes as service
+from backend.app.services import resume_builder as builder_svc
 from packages.config.settings import settings
 
 router = APIRouter(tags=["resumes"], responses=COMMON_ERROR_RESPONSES)
@@ -121,3 +124,33 @@ async def update_resume_fact(
     db: AsyncSession = Depends(get_db_session),
 ):
     return await service.update_fact(db, id, fact_id, candidate["id"], update_data.content)
+
+
+# ── Phase 80: Tailored Resume Draft ───────────────────────────────────────────
+
+class TailoredResumeRequest(BaseModel):
+    job_id: uuid.UUID
+
+
+@router.post(
+    "/resumes/tailored",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Generate a tailored resume draft",
+    description=(
+        "Produces a tailored resume draft grounded in the candidate's verified evidence "
+        "(projects, experiences, skills, STAR stories) optimised for the given job. "
+        "Every bullet references an evidence_source_id — no fabricated achievements."
+    ),
+)
+async def generate_tailored_resume(
+    payload: TailoredResumeRequest,
+    candidate: dict = Depends(get_current_candidate),
+    db: AsyncSession = Depends(get_db_session),
+    gateway=Depends(get_ai_gateway),
+):
+    from praxis_ai_gateway.router import RoutingContext
+    ctx = RoutingContext(user_id=candidate["user_id"])
+    return await builder_svc.draft_tailored_resume(
+        db, candidate["id"], str(payload.job_id), gateway, ctx
+    )
