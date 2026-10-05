@@ -207,7 +207,7 @@ class InterviewSession:
             call_result = await gateway_router.route(
                 "deep_reasoning",
                 routing_ctx,
-                "structured",
+                "generate_structured",
                 messages=[m.model_dump(exclude_none=True) for m in builder.build()],
                 schema=PolicyDecision
             )

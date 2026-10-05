@@ -5,7 +5,7 @@ _PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[5]
 import logging
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from realtime_agent.app.scoring.models import AnswerScore, DimensionScores, StarCompleteness, ClaimExtractionResult, SystemDesignScore
+from realtime_agent.app.scoring.models import AnswerScore, StarCompleteness, ClaimExtractionResult, SystemDesignScore
 from praxis_ai_gateway.prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)
@@ -102,8 +102,7 @@ async def score_answer_async(
         builder.add_task("This is a behavioral question. You MUST populate star_completeness.")
         
     builder.add_untrusted("candidate_answer", "realtime_stt", candidate_answer)
-    builder.add_output_schema(DimensionScores) # Wait, we need a combined schema if we want the LLM to output everything except grounding
-    
+
     class LlmScoringResult(BaseModel):
         relevance: float = Field(ge=0.0, le=1.0)
         correctness: float = Field(ge=0.0, le=1.0)
