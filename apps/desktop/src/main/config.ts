@@ -7,7 +7,7 @@
  */
 
 function requireEnv(name: string, devFallback?: string): string {
-  const value = process.env[name] ?? import.meta.env?.[name];
+  const value = process.env[name];
   if (value) return value;
   if (devFallback && process.env.NODE_ENV === 'development') {
     console.warn(`[config] ${name} not set — using dev fallback: ${devFallback}`);
