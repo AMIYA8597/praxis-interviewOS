@@ -136,8 +136,6 @@ async def interview_day_readiness_check(
               AND g.importance = 'required'
             LIMIT 5
         """), {"cid": candidate["id"], "jid": str(job_id)})
-        jd_gaps = [dict(r._mapping) for r in jd_rows.fetchall()] if False else []
-        # Note: execute returns row directly
         jd_gaps = [dict(r._mapping) for r in gap_rows.fetchall()]
 
     return {

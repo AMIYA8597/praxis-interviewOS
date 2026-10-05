@@ -7,7 +7,7 @@ Per-dimension scores with: confidence (sample_count-based), trend
 Not a single number — a multi-dimensional view grounded in evidence.
 """
 import logging
-from typing import Literal, Optional
+from typing import Literal
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

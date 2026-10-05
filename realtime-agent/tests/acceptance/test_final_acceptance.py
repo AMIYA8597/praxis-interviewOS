@@ -12,8 +12,6 @@ Tests the complete PRAXIS experience as a real candidate would use it:
 
 All assertions are on real observable behavior. No fabricated pass conditions.
 """
-import asyncio
-import json
 import os
 import uuid
 

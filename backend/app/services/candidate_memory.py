@@ -9,7 +9,6 @@ and are explicitly tagged as inferences.
 SM-2 spaced repetition parameters are updated from real session scores.
 """
 import logging
-import math
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 

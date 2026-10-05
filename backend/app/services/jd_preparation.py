@@ -6,7 +6,6 @@ Updates preparation plan with JD-specific priorities.
 
 No hardcoded domain mappings; uses fuzzy overlap + LLM extraction if available.
 """
-import json
 import logging
 import re
 from datetime import datetime, timezone

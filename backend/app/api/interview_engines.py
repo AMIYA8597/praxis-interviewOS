@@ -2,9 +2,7 @@
 Phase 61-65 — Interviewer Personality, System Design Engine, Coding Engine, Behavioral Engine APIs.
 """
 import uuid
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

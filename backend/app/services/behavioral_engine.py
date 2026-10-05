@@ -9,7 +9,6 @@ justify it with evidence. Uses verified_context from the job blueprint.
 """
 import logging
 import re
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

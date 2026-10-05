@@ -4,7 +4,7 @@ Phase 57-60 — Real Preparation Engine, Readiness 2.0, JD-Driven Preparation, A
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 

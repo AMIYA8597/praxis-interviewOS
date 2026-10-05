@@ -10,7 +10,6 @@ Real tracking: provider/model/latency/tokens/cost per call.
 No fabricated metrics — only real call data.
 """
 import logging
-import time
 from datetime import datetime, timezone
 from typing import Optional
 

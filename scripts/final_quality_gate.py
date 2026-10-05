@@ -223,7 +223,6 @@ def check_test_harnesses_present() -> GateResult:
 def check_no_import_meta_in_tests() -> GateResult:
     """ts-jest cannot parse import.meta — verify desktop test files use process.env."""
     g = GateResult("no_import_meta_in_jest_tests", "compatibility")
-    import re
     issues = []
     test_dirs = ["apps/desktop/src"]
     for tdir in test_dirs:
