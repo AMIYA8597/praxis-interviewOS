@@ -110,7 +110,7 @@ def _mock_gateway(monkeypatch):
                 strengths=["Clear Python explanation"],
                 weaknesses=["Could be more specific about tradeoffs"],
                 flagged_claims=[],
-                jd_coverage={"Python": True, "React": True},
+                jd_coverage={"covered": ["Python", "React"], "missed": []},
             ))
         if schema is PolicyDecision or (schema and getattr(schema, "__name__", "") == "PolicyDecision"):
             return MagicMock(result=PolicyDecision(
