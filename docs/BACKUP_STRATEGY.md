@@ -1,140 +1,106 @@
 # PRAXIS Backup Strategy
-**Phase 97**
 
----
+## Database (Supabase PostgreSQL)
 
-## Recovery Objectives
+### Automated backups (Supabase managed)
 
-| Metric | Target | Achieved by |
-|--------|--------|-------------|
-| RPO (Recovery Point Objective) | 24h | Supabase daily backups |
-| RTO (Recovery Time Objective) | 2h | Snapshot restore + redeploy |
-| RPO (with PITR enabled) | 1 min | Supabase PITR (paid plan) |
+| Plan | Backup Frequency | Retention | Point-in-Time Recovery |
+|---|---|---|---|
+| Free | Daily | 7 days | No |
+| Pro | Daily | 30 days | Yes (PITR to any second in the window) |
 
----
+**Recommendation**: Use Supabase Pro for staging and production to enable PITR.
 
-## Backup Types
+### Manual backup script
 
-### 1. Supabase Automatic Backups
-- **Frequency:** Daily (Supabase Pro plan)
-- **Retention:** 7 days rolling
-- **Format:** PostgreSQL snapshot
-- **Location:** Supabase-managed (AWS S3, same region as project)
-- **Access:** Supabase dashboard → Database → Backups → Download
-
-**REQUIRED:** Use Supabase Pro plan ($25/month minimum). Free tier does not include backups.
-
-### 2. Point-in-Time Recovery (PITR)
-- **Available on:** Supabase Pro and above
-- **Granularity:** 1-minute recovery points
-- **Retention:** 7 days
-- **Use when:** Data corruption, accidental deletion within past 7 days
-
-Enable: Supabase dashboard → Database → Backups → Enable PITR
-
-### 3. Off-Site Logical Export (ARQ scheduled job)
-- **Frequency:** Weekly (Sunday 02:00 UTC)
-- **Format:** pg_dump (plain SQL)
-- **Destination:** GCS bucket `praxis-backups-{project-id}` (separate GCP project)
-- **Retention:** 4 weekly backups (28 days)
-- **Purpose:** Protection against Supabase-level incident; independent of Supabase
-
-```python
-# Implemented in backend/app/workers/backup_worker.py
-# Job: export_database_to_gcs
-# Idempotency key: backup_{date}
-```
-
----
-
-## Restore Procedure
-
-### From Supabase snapshot
-
-```
-1. Supabase dashboard → Database → Backups
-2. Select the backup point
-3. Click "Restore" — this restores to the SAME project
-   WARNING: This overwrites the current database. All data since the backup is lost.
-4. Monitor restore progress in the Supabase dashboard
-5. Run migrations (to verify they are idempotent and current)
-6. Run smoke tests
-7. Monitor application for 30 minutes
-```
-
-### From PITR
-
-```
-1. Supabase dashboard → Database → Backups → Point-in-time recovery
-2. Select exact timestamp
-3. Click "Restore"
-4. Same verification steps as above
-```
-
-### From off-site pg_dump
+`scripts/backup.sh` creates a `pg_dump` backup of the database.
 
 ```bash
-# Restore to a fresh Supabase project
-psql -h db.{project-ref}.supabase.co -U postgres -d postgres \
-  < praxis_backup_2026_10_05.sql
+# Manual backup (from a machine with psql access):
+bash scripts/backup.sh
+# Output: backup_YYYYMMDD_HHMMSS.sql.gz in ./backups/
 
-# Run migrations to ensure schema is current
-DATABASE_URL=<new-project-url> python scripts/migrate.py
+# Upload to GCS (replace BUCKET):
+gsutil cp ./backups/backup_*.sql.gz gs://praxis-backups-staging/database/
 ```
 
----
+**Status**: Script exists. Scheduled execution via Cloud Scheduler is NOT yet provisioned.
 
-## Backup Verification (Restore Drill)
+### Backup schedule (target)
 
-**A backup that has never been restored is NOT considered verified.**
+| Environment | Frequency | Retention | Method |
+|---|---|---|---|
+| Staging | Daily | 14 days | Supabase automated + manual script |
+| Production | Continuous PITR | 30 days | Supabase Pro PITR |
+| Production manual | Weekly | 90 days | `scripts/backup.sh` → GCS |
 
-Restore drill procedure (quarterly):
-1. Create a temporary Supabase project
-2. Restore latest off-site pg_dump to it
-3. Run `python scripts/migrate.py` against the restored project — must be no-op
-4. Run the RLS security test suite against the restored project
-5. Verify row count matches production (within expected delta)
-6. Delete the temporary project
-
-Drill frequency: **quarterly minimum, before major releases**.
-
----
-
-## What Is Backed Up
-
-✅ PostgreSQL user data (all tables)
-✅ Supabase Storage file metadata (in Postgres)
-✅ Authentication user records (in Postgres)
-
-❌ Supabase Storage file objects (resumes, audio) — **not included in database backups**
-
-### Storage Object Backup
-
-Resume PDFs and documents must be backed up separately:
+### GCS backup bucket (to be created)
 
 ```bash
-# Sync Supabase Storage objects to GCS (weekly, via worker)
-# Implemented in backend/app/workers/backup_worker.py: backup_storage_objects
+gcloud storage buckets create gs://praxis-backups-staging \
+  --project=praxis-staging \
+  --location=us-central1 \
+  --public-access-prevention
 ```
 
 ---
 
-## Backup Monitoring
+## Redis (Memorystore)
 
-Alert when:
-- Weekly pg_dump job fails (ARQ dead-letter + alert)
-- Backup file size < 50% of previous week (anomaly detection)
-- Restore drill has not been completed in > 90 days
+Redis is a **cache and job queue** — not a primary data store.
+
+### What is in Redis
+
+| Key pattern | Data | Durability requirement |
+|---|---|---|
+| `arq:queue` | Pending jobs | HIGH — job loss = missed processing |
+| `arq:failed_jobs` | Failed jobs | MEDIUM — can be reconstructed from DB |
+| `arq:in_progress` | In-flight jobs | LOW — recovered on worker restart |
+| `jwks:cache` | JWKS keys | LOW — refreshed from Supabase on cache miss |
+| `candidate:*` | Auth user→candidate cache | LOW — re-derived on miss |
+
+**ARQ job durability**: ARQ uses Redis RPOPLPUSH for at-least-once delivery. In-flight jobs are re-queued if the worker crashes before acknowledgement. The database is the source of truth for completed job results.
+
+### Redis backup
+
+Memorystore BASIC tier: no persistence by default.  
+Memorystore STANDARD tier: RDB snapshots available.
+
+**Recommendation**: Use STANDARD tier for production with RDB persistence interval of 1 hour.
+
+For staging, BASIC tier is acceptable since Redis data is expendable (jobs can be re-queued from the database).
 
 ---
 
-## Data Retention Policy
+## Application code
 
-| Data type | Retention |
-|-----------|-----------|
-| Session transcripts | Indefinite (candidate-owned) |
-| Audio recordings | 30 days (auto-deleted by worker) |
-| Resume files | Until candidate deletion request |
-| AI provider logs | 90 days |
-| Worker idempotency log | 7 days |
-| Session state (Redis) | 2 hours TTL |
+All code is in Git (GitHub). The Git repository is the authoritative backup of application code.
+
+**No additional backup required.**
+
+---
+
+## Secrets
+
+Secrets in Secret Manager retain all historical versions automatically. Version deletion requires explicit action.
+
+**Rotate secrets on schedule**:
+- Supabase service role key: every 90 days
+- Fernet key: no rotation without coordinated re-encryption of stored data
+- AI provider keys: rotate if exposed or on provider's recommended schedule
+
+---
+
+## Recovery Priority
+
+| Asset | RPO | RTO | Recovery Method |
+|---|---|---|---|
+| PostgreSQL database | < 1 hour (Pro PITR) | < 30 min | Supabase PITR or restore from pg_dump |
+| Redis | 0 (acceptable loss) | < 5 min | Restart; workers re-queue from DB state |
+| Container images | 0 (git SHA is source of truth) | < 20 min | Re-build from git commit |
+| Secrets | 0 (versioned in Secret Manager) | < 5 min | Re-read from Secret Manager |
+| Application code | 0 (Git) | < 10 min | Re-deploy from git |
+
+---
+
+*Last updated: 2026-10-05*
