@@ -128,8 +128,10 @@ jobs:
 
     - name: Verify No Root Scripts
       run: |
-        if ls *.py 1> /dev/null 2>&1; then
-          echo "::error::Loose .py scripts found in repository root. Move them to scripts/ or delete them."
+        # conftest.py is a legitimate pytest root fixture; all other .py files are loose scripts
+        scripts=$(ls *.py 2>/dev/null | grep -v '^conftest\.py$' || true)
+        if [ -n "$scripts" ]; then
+          echo "::error::Loose .py scripts found in repository root: $scripts. Move them to scripts/ or delete them."
           exit 1
         fi
 
