@@ -96,9 +96,14 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     )
 
     from backend.app.rate_limiter import RateLimitMiddleware
+    from backend.app.middleware import SecurityHeadersMiddleware
 
-    # Order: last added = outermost. RequestId must wrap everything so even
-    # rate-limited/CORS-rejected responses carry an id and get logged.
+    # Stash APP_ENV on app.state so SecurityHeadersMiddleware can read it
+    # without re-instantiating Settings on every request.
+    app.state.settings_app_env = settings.APP_ENV
+
+    # Order: last added = outermost. SecurityHeaders → RequestId → CORS → RateLimit.
+    # SecurityHeaders must be outermost so it runs on all responses including errors.
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -109,6 +114,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-ID", "Retry-After"],
     )
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     register_exception_handlers(app)
 
     api_prefix = "/api/v1"

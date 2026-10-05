@@ -16,6 +16,36 @@ from backend.app.core.context import (
 
 logger = logging.getLogger("praxis.http")
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Adds OWASP-recommended security headers to every response.
+
+    HSTS is only set in production (HTTP in dev would lock out local debugging).
+    No CSP here — this API returns JSON; the frontend owns its own CSP.
+    """
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        # X-XSS-Protection: 0 is the modern recommendation (disables legacy filter that itself caused XSS)
+        response.headers.setdefault("X-XSS-Protection", "0")
+        # HSTS only makes sense over real HTTPS; omit it in dev to avoid locking out HTTP.
+        from packages.config.settings import Settings
+        try:
+            env = request.app.state.__dict__.get("settings_app_env") or Settings().APP_ENV
+        except Exception:
+            env = "development"
+        if env in ("staging", "production"):
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=63072000; includeSubDomains",
+            )
+        return response
+
+
 # Accept client-supplied ids only if they look like a sane token; otherwise
 # generate our own so log lines cannot be forged/injected via the header.
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:\-]{8,128}$")

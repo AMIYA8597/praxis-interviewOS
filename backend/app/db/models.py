@@ -742,3 +742,15 @@ class PrivacyEvent(Base):
     consent_given = Column(Boolean)
     created_at = _created_at()
     updated_at = _updated_at()
+
+
+class FeatureFlag(Base):
+    __tablename__ = "feature_flags"
+    id = _pk()
+    name = Column(Text, nullable=False)
+    description = Column(Text)
+    is_enabled = Column(Boolean, nullable=False, default=False)
+    scope = Column(Text, nullable=False, default="global")
+    scope_value = Column(Text)
+    created_at = _created_at()
+    updated_at = _updated_at()
