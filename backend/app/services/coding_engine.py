@@ -24,6 +24,25 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TIME_LIMIT_MS = 2000
 _DEFAULT_MEMORY_LIMIT_KB = 65536  # 64 MB
 
+
+def _sandbox_preexec(memory_limit_kb: int) -> None:
+    """
+    Called in the child process before exec — enforces resource limits on Linux.
+    Gracefully skipped on Windows (no `resource` module).
+    Limits:
+      - RLIMIT_AS: virtual address space (memory)
+      - RLIMIT_NPROC: number of subprocesses (blocks fork bombs)
+      - RLIMIT_NOFILE: open file descriptors
+    """
+    try:
+        import resource as _resource  # Unix only
+        mem_bytes = memory_limit_kb * 1024
+        _resource.setrlimit(_resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+        _resource.setrlimit(_resource.RLIMIT_NPROC, (1, 1))  # no child processes
+        _resource.setrlimit(_resource.RLIMIT_NOFILE, (64, 64))  # limit open files
+    except (ImportError, ValueError, OSError):
+        pass  # Windows or privilege issue — timeout is still the last-resort guard
+
 # Supported languages and their execution configs
 _LANGUAGE_CONFIGS = {
     "python": {
@@ -56,11 +75,14 @@ async def _execute_code_subprocess(
         cmd = config["command"] + [tmpfile]
         start = time.perf_counter()
         try:
+            import functools
+            preexec = functools.partial(_sandbox_preexec, _DEFAULT_MEMORY_LIMIT_KB)
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                preexec_fn=preexec if sys.platform != "win32" else None,
             )
             stdout_data, stderr_data = await asyncio.wait_for(
                 proc.communicate(input=stdin_data.encode()),
