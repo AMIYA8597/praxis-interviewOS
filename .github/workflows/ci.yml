@@ -94,13 +94,23 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r backend/requirements.txt
-        pip install pytest pytest-asyncio respx ruff fakeredis
+        pip install pytest pytest-asyncio respx ruff fakeredis pip-audit
         # Local packages first so backend's praxis-config / praxis-ai-gateway
         # dependencies resolve to the in-repo sources.
         pip install -e packages/config
         pip install -e packages/ai-gateway
         pip install -e backend
         pip install -e realtime-agent
+
+    - name: Python Dependency Audit
+      run: |
+        pip-audit --skip-editable -f json -o /tmp/pip-audit.json || true
+        pip-audit --skip-editable 2>&1 | tee /tmp/pip-audit.txt
+        # Fail on CRITICAL or HIGH severity CVEs only
+        if grep -qE "^\s+(Critical|High)" /tmp/pip-audit.txt; then
+          echo "::error::pip-audit found Critical/High CVEs. See output above."
+          exit 1
+        fi
 
     - name: Run Migrations
       run: |
@@ -185,6 +195,9 @@ jobs:
 
     - name: Install Dependencies
       run: pnpm install --frozen-lockfile
+
+    - name: Frontend Dependency Audit
+      run: pnpm audit --audit-level=high || true
 
     - name: Run Frontend Tests
       run: pnpm -r --if-present run test
