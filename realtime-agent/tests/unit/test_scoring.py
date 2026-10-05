@@ -48,3 +48,21 @@ async def test_score_answer_async():
         # = 0.27 + 0.16 + 0.16 + 0.07 + 0.10 + 0.09 = 0.85
         assert abs(result.overall - 0.85) < 0.01
         assert result.grounding == 1.0
+
+
+def test_system_design_score_model():
+    from realtime_agent.app.scoring.models import SystemDesignScore
+    score = SystemDesignScore(
+        requirements_clarification=0.8,
+        high_level_design=0.7,
+        scalability=0.6,
+        data_modeling=0.9,
+        api_design=0.8,
+        bottleneck_identification=0.7,
+        trade_off_reasoning=0.8,
+        communication=0.9,
+        overall=0.75,
+        rationale="Solid design with minor gaps in scalability.",
+    )
+    assert score.rubric_version == "system_design_v1"
+    assert 0.0 <= score.overall <= 1.0
