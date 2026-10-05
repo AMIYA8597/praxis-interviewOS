@@ -409,6 +409,7 @@ class SessionOrchestrator:
         await self._transition(SessionState.DEBRIEF)
 
         status = "ready"
+        debrief_result = None
         try:
             debrief_result = await generate_debrief(self.session_id, self.session_manager.db, self.gateway, self.routing_ctx)
             await self._persist_debrief(debrief_result)
@@ -423,8 +424,11 @@ class SessionOrchestrator:
         # STOPPED first: clients disconnect as soon as they see debrief.ready, and the
         # transport must already consider the session finished (not a dropped socket).
         await self._transition(SessionState.STOPPED)
+        payload: Dict[str, Any] = {"status": status}
+        if status == "ready" and debrief_result is not None:
+            payload.update(debrief_result.model_dump())
         self.enqueue_event(
-            Envelope(type="debrief.ready", session_id=self.session_id, sequence=0, payload={"status": status}),
+            Envelope(type="debrief.ready", session_id=self.session_id, sequence=0, payload=payload),
             critical=True,
         )
 
