@@ -1,3 +1,4 @@
+from packages.config.settings import PROJECT_ROOT
 import asyncio
 import logging
 from pydantic import BaseModel
@@ -16,7 +17,7 @@ class TurnEndDetector:
     def __init__(self, router: GatewayRouter, silence_threshold_ms: int = 550):
         self.router = router
         self.silence_threshold_ms = silence_threshold_ms
-        with open("prompts/classification/completeness_v1.md", "r", encoding="utf-8") as f:
+        with open(str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/classification/completeness_v1.md")), "r", encoding="utf-8") as f:
             self.prompt_template = f.read()
 
     async def evaluate(self, vad_silence_ms: int, partial_transcript: str) -> TurnEndDecision:

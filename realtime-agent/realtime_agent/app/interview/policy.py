@@ -1,3 +1,4 @@
+from packages.config.settings import PROJECT_ROOT
 import logging
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
@@ -85,7 +86,7 @@ class InterviewSession:
         self.is_warmed_up = False
         
         # Load the core interviewer system prompt
-        with open("prompts/interviewer/system_v1.md", "r") as f:
+        with open(str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/interviewer/system_v1.md")), "r") as f:
             self.system_prompt = f.read()
 
     def warm_up(self):

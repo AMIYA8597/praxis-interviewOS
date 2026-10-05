@@ -7,7 +7,7 @@ type ScreenState =
   | { screen: 'loading' }
   | { screen: 'auth' }
   | { screen: 'dashboard' }
-  | { screen: 'practice'; sessionId: string }
+  | { screen: 'practice' }
   | { screen: 'study-workbench' };
 
 export function App() {
@@ -105,7 +105,7 @@ export function App() {
         <nav className="flex-1 p-4 space-y-2">
           <button 
             className={`w-full text-left px-3 py-2 rounded text-sm font-medium transition-colors ${state.screen === 'practice' ? 'bg-indigo-900/50 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}
-            onClick={() => setState({ screen: 'practice', sessionId: 'mock-session-id' })}
+            onClick={() => setState({ screen: 'practice' })}
           >
             Practice Arena
           </button>
