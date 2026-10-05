@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
 
 from backend.app.api.admin import router as admin_router
+from backend.app.api.metrics import router as metrics_router
 from backend.app.api.analytics import router as analytics_router
 from backend.app.api.applications import router as applications_router
 from backend.app.api.auth import router as auth_router
@@ -140,6 +141,9 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
         admin_router,
     ):
         app.include_router(r, prefix=api_prefix)
+
+    # Metrics is mounted at root (no /api/v1 prefix) — scraped by infra, not clients.
+    app.include_router(metrics_router)
 
     if settings.otel_enabled:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor

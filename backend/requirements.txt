@@ -47,6 +47,7 @@ tiktoken==0.8.0
 
 # ── Testing (dev/CI only — not in production image) ───────────────────────────
 pytest==8.3.4
+prometheus_client==0.25.0
 pytest-asyncio==0.24.0
 ruff==0.8.4
 respx==0.22.0

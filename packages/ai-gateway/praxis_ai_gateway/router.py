@@ -135,6 +135,32 @@ class GatewayRouter:
                 continue
 
             latency_ms = round((time.perf_counter() - started) * 1000, 1)
+
+            # Output safety validation — run on non-stream structured/text results.
+            # Safety failures are logged but do NOT abort the request; they surface as
+            # warnings so that a single adversarial resume can't kill an interview session.
+            if method_name in ("structured", "generate"):
+                try:
+                    from praxis_ai_gateway.output_safety import (
+                        validate_text_output,
+                        validate_structured_output,
+                    )
+                    raw = getattr(result, "content", None) or getattr(result, "text", None)
+                    if isinstance(raw, dict):
+                        report = validate_structured_output(raw)
+                    elif isinstance(raw, str):
+                        report = validate_text_output(raw)
+                    else:
+                        report = None
+                    if report and not report.passed:
+                        logger.warning("ai_output_safety_violation", extra={
+                            "task": task,
+                            "provider": provider.name,
+                            "violations": [v.code for v in report.error_violations],
+                        })
+                except Exception:
+                    pass  # Safety check is defensive; never propagate its own errors
+
             # Telemetry is best-effort and must never turn a success into a failure.
             try:
                 if last_provider:

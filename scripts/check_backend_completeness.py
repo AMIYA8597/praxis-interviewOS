@@ -128,8 +128,7 @@ CHECKS: list[Check] = [
     # TESTING
     Check("tests.rls",             ["backend/tests/security/test_rls_isolation.py", "backend/tests/integration/test_rls_bypass.py"]),
     Check("tests.jwt",             ["backend/tests/hardening/test_jwt_auth.py"]),
-    Check("tests.prompt_injection",["backend/tests/security/test_prompt_injection.py"], required=False,
-          description="No dedicated test yet; prompt_builder.py provides the defence"),
+    Check("tests.prompt_injection",["backend/tests/security/test_prompt_injection.py"]),
     Check("tests.e2e",             ["realtime-agent/tests/integration/test_e2e_acceptance.py"]),
     Check("tests.no_fake_data",    ["scripts/check_no_fake_data.py"]),
     Check("tests.gateway_boundary",["scripts/check_gateway_boundary.py"]),

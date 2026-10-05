@@ -61,8 +61,9 @@ def detect_star_components(answer: str) -> dict:
         results[component] = {"present": matched}
 
     # Check for quantified result (stronger signal)
+    # \b at end fails after non-word chars like % and x; use lookahead instead.
     has_quantified_result = bool(
-        re.search(r"\b\d+\s*(%|percent|ms|seconds?|hours?|days?|users?|requests?|x)\b", answer_lower)
+        re.search(r"\b\d+\s*(%|percent|ms|seconds?|hours?|days?|users?|requests?|x)(?=\s|[.,;:)\]!?]|$)", answer_lower)
     )
     results["result"]["quantified"] = has_quantified_result
 
