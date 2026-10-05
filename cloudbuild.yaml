@@ -1,15 +1,43 @@
-# Cloud Build — Production CI/CD pipeline
+# Cloud Build — PRAXIS CI/CD pipeline
 # Triggered on push to main branch.
-# Builds all three service images, pushes to Artifact Registry,
-# deploys to staging, runs smoke tests, tags for production.
+# Flow: test → build → push → capture-digest → deploy-staging → smoke → release-manifest
+#
+# IMMUTABLE RELEASES: images are tagged by git SHA only. The :latest tag is
+# NEVER pushed. Cloud Run deployments use the SHA tag; Terraform uses the digest.
+#
+# Required substitutions (set in Cloud Build trigger):
+#   _STAGING_PROJECT   — GCP project for staging (e.g. praxis-staging)
+#   _REGISTRY_PROJECT  — GCP project hosting Artifact Registry (e.g. praxis-production)
+#   _GITHUB_REPO       — owner/repo (e.g. AMIYA8597/praxis-interviewOS)
 
 substitutions:
   _REGION: us-central1
-  _REGISTRY: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/praxis
+  _REGISTRY: ${_REGION}-docker.pkg.dev/${_REGISTRY_PROJECT}/praxis
   _IMAGE_TAG: ${SHORT_SHA}
-  _STAGING_API_URL: ""  # set by Cloud Build trigger or pass via --substitutions
 
 steps:
+  # ── Run tests before building (fast feedback) ─────────────────────────────
+  - id: run-tests
+    name: python:3.11-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install -q -r backend/requirements.txt
+        pip install -q pytest pytest-asyncio respx ruff fakeredis
+        pip install -q -e packages/config -e packages/ai-gateway -e backend -e realtime-agent
+        ruff check .
+        python -m pytest backend/tests/ -q -m "not live_provider" --tb=short
+        python scripts/check_gateway_boundary.py
+        python scripts/check_prompt_construction_boundary.py
+        python scripts/check_no_fake_data.py
+        python scripts/check_backend_completeness.py
+    waitFor: ['-']
+    env:
+      - DATABASE_URL=sqlite+aiosqlite:///./test.db
+      - REDIS_URL=redis://localhost:6379/0
+      - LOCAL_ONLY_MODE=true
+
   # ── Build images in parallel ───────────────────────────────────────────────
   - id: build-api
     name: gcr.io/cloud-builders/docker
@@ -22,9 +50,11 @@ steps:
       - --target
       - production
       - --cache-from
-      - ${_REGISTRY}/praxis-api:latest
+      - ${_REGISTRY}/praxis-api:cache
+      - --build-arg
+      - BUILDKIT_INLINE_CACHE=1
       - .
-    waitFor: ['-']
+    waitFor: [run-tests]
 
   - id: build-realtime
     name: gcr.io/cloud-builders/docker
@@ -37,9 +67,11 @@ steps:
       - --target
       - production
       - --cache-from
-      - ${_REGISTRY}/praxis-realtime:latest
+      - ${_REGISTRY}/praxis-realtime:cache
+      - --build-arg
+      - BUILDKIT_INLINE_CACHE=1
       - .
-    waitFor: ['-']
+    waitFor: [run-tests]
 
   - id: build-worker
     name: gcr.io/cloud-builders/docker
@@ -52,11 +84,13 @@ steps:
       - --target
       - production
       - --cache-from
-      - ${_REGISTRY}/praxis-worker:latest
+      - ${_REGISTRY}/praxis-worker:cache
+      - --build-arg
+      - BUILDKIT_INLINE_CACHE=1
       - .
-    waitFor: ['-']
+    waitFor: [run-tests]
 
-  # ── Push images ────────────────────────────────────────────────────────────
+  # ── Push SHA-tagged images ─────────────────────────────────────────────────
   - id: push-api
     name: gcr.io/cloud-builders/docker
     args: [push, ${_REGISTRY}/praxis-api:${_IMAGE_TAG}]
@@ -72,6 +106,54 @@ steps:
     args: [push, ${_REGISTRY}/praxis-worker:${_IMAGE_TAG}]
     waitFor: [build-worker]
 
+  # ── Push build-cache tags (separate from release tags) ────────────────────
+  # These are cache-only tags, never deployed. They allow --cache-from to work
+  # on the next build. They are NOT the release identifier.
+  - id: push-cache
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker tag ${_REGISTRY}/praxis-api:${_IMAGE_TAG} ${_REGISTRY}/praxis-api:cache
+        docker tag ${_REGISTRY}/praxis-realtime:${_IMAGE_TAG} ${_REGISTRY}/praxis-realtime:cache
+        docker tag ${_REGISTRY}/praxis-worker:${_IMAGE_TAG} ${_REGISTRY}/praxis-worker:cache
+        docker push ${_REGISTRY}/praxis-api:cache
+        docker push ${_REGISTRY}/praxis-realtime:cache
+        docker push ${_REGISTRY}/praxis-worker:cache
+    waitFor: [push-api, push-realtime, push-worker]
+
+  # ── Capture immutable image digests ───────────────────────────────────────
+  # Digests are stable even if the SHA tag is later re-tagged. They are used
+  # by Terraform for immutable Cloud Run deployments.
+  - id: capture-digests
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        API_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${_REGISTRY}/praxis-api:${_IMAGE_TAG} 2>/dev/null || \
+          gcloud artifacts docker images describe ${_REGISTRY}/praxis-api:${_IMAGE_TAG} --format='value(image_summary.fully_qualified_digest)' 2>/dev/null || \
+          echo "DIGEST_UNAVAILABLE")
+        REALTIME_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${_REGISTRY}/praxis-realtime:${_IMAGE_TAG} 2>/dev/null || \
+          gcloud artifacts docker images describe ${_REGISTRY}/praxis-realtime:${_IMAGE_TAG} --format='value(image_summary.fully_qualified_digest)' 2>/dev/null || \
+          echo "DIGEST_UNAVAILABLE")
+        WORKER_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${_REGISTRY}/praxis-worker:${_IMAGE_TAG} 2>/dev/null || \
+          gcloud artifacts docker images describe ${_REGISTRY}/praxis-worker:${_IMAGE_TAG} --format='value(image_summary.fully_qualified_digest)' 2>/dev/null || \
+          echo "DIGEST_UNAVAILABLE")
+        cat > /workspace/digests.env << EOF
+        API_IMAGE=${_REGISTRY}/praxis-api:${_IMAGE_TAG}
+        API_DIGEST=$API_DIGEST
+        REALTIME_IMAGE=${_REGISTRY}/praxis-realtime:${_IMAGE_TAG}
+        REALTIME_DIGEST=$REALTIME_DIGEST
+        WORKER_IMAGE=${_REGISTRY}/praxis-worker:${_IMAGE_TAG}
+        WORKER_DIGEST=$WORKER_DIGEST
+        GIT_SHA=${SHORT_SHA}
+        BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        EOF
+        cat /workspace/digests.env
+    waitFor: [push-cache]
+
   # ── Deploy to staging ──────────────────────────────────────────────────────
   - id: deploy-staging-api
     name: gcr.io/cloud-builders/gcloud
@@ -81,9 +163,10 @@ steps:
       - praxis-api
       - --image=${_REGISTRY}/praxis-api:${_IMAGE_TAG}
       - --region=${_REGION}
-      - --project=praxis-staging
+      - --project=${_STAGING_PROJECT}
       - --quiet
-    waitFor: [push-api]
+      - --no-traffic   # new revision gets 0% traffic until smoke passes
+    waitFor: [capture-digests]
 
   - id: deploy-staging-realtime
     name: gcr.io/cloud-builders/gcloud
@@ -93,9 +176,10 @@ steps:
       - praxis-realtime
       - --image=${_REGISTRY}/praxis-realtime:${_IMAGE_TAG}
       - --region=${_REGION}
-      - --project=praxis-staging
+      - --project=${_STAGING_PROJECT}
       - --quiet
-    waitFor: [push-realtime]
+      - --no-traffic
+    waitFor: [capture-digests]
 
   - id: deploy-staging-worker
     name: gcr.io/cloud-builders/gcloud
@@ -105,44 +189,63 @@ steps:
       - praxis-worker
       - --image=${_REGISTRY}/praxis-worker:${_IMAGE_TAG}
       - --region=${_REGION}
-      - --project=praxis-staging
+      - --project=${_STAGING_PROJECT}
       - --quiet
-    waitFor: [push-worker]
+      - --no-traffic
+    waitFor: [capture-digests]
 
   # ── Staging smoke test ─────────────────────────────────────────────────────
+  # Dynamically resolves the staging Cloud Run URL — no hardcoded domain.
   - id: staging-smoke-test
     name: python:3.11-slim
     entrypoint: bash
     env:
-      - STAGING_API_URL=${_STAGING_API_URL}
+      - STAGING_PROJECT=${_STAGING_PROJECT}
+      - REGION=${_REGION}
     args:
       - -c
       - |
         pip install -q httpx
-        python - <<'EOF'
-        import httpx, sys, os
-        base = os.environ.get("STAGING_API_URL", "")
-        assert base, "STAGING_API_URL not set — pass via Cloud Build trigger substitution _STAGING_API_URL"
-        r = httpx.get(f"{base}/health", timeout=30)
-        assert r.status_code == 200, f"Health check failed: {r.status_code}"
-        print(f"Staging health check passed: {r.json()}")
-        EOF
+        python scripts/smoke_test.py
     waitFor: [deploy-staging-api]
 
-  # ── Tag :latest ────────────────────────────────────────────────────────────
-  - id: tag-latest
-    name: gcr.io/cloud-builders/docker
+  # ── Migrate traffic to new revision after smoke passes ────────────────────
+  - id: migrate-staging-traffic
+    name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
     args:
       - -c
       - |
-        docker tag ${_REGISTRY}/praxis-api:${_IMAGE_TAG} ${_REGISTRY}/praxis-api:latest
-        docker tag ${_REGISTRY}/praxis-realtime:${_IMAGE_TAG} ${_REGISTRY}/praxis-realtime:latest
-        docker tag ${_REGISTRY}/praxis-worker:${_IMAGE_TAG} ${_REGISTRY}/praxis-worker:latest
-        docker push ${_REGISTRY}/praxis-api:latest
-        docker push ${_REGISTRY}/praxis-realtime:latest
-        docker push ${_REGISTRY}/praxis-worker:latest
+        REVISION=$(gcloud run revisions list \
+          --service=praxis-api \
+          --region=${_REGION} \
+          --project=${_STAGING_PROJECT} \
+          --format="value(metadata.name)" \
+          --limit=1 2>/dev/null)
+        if [ -n "$REVISION" ]; then
+          gcloud run services update-traffic praxis-api \
+            --to-revisions="$REVISION=100" \
+            --region=${_REGION} \
+            --project=${_STAGING_PROJECT} \
+            --quiet
+        fi
     waitFor: [staging-smoke-test]
+
+  # ── Generate release manifest ──────────────────────────────────────────────
+  - id: generate-release-manifest
+    name: python:3.11-slim
+    entrypoint: bash
+    env:
+      - GIT_SHA=${SHORT_SHA}
+      - REGION=${_REGION}
+      - STAGING_PROJECT=${_STAGING_PROJECT}
+      - REGISTRY_PROJECT=${_REGISTRY_PROJECT}
+    args:
+      - -c
+      - |
+        source /workspace/digests.env 2>/dev/null || true
+        python scripts/generate_release_manifest.py
+    waitFor: [migrate-staging-traffic]
 
 images:
   - ${_REGISTRY}/praxis-api:${_IMAGE_TAG}
@@ -153,5 +256,7 @@ options:
   machineType: E2_HIGHCPU_8
   logging: CLOUD_LOGGING_ONLY
   dynamic_substitutions: true
+  env:
+    - DOCKER_BUILDKIT=1
 
 timeout: 3600s

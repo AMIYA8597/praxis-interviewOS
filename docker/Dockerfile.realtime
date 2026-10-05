@@ -63,7 +63,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     curl \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r praxis && useradd -r -g praxis praxis
+    && groupadd -r praxis && useradd -r -g praxis -d /app praxis
 
 WORKDIR /app
 
@@ -71,12 +71,21 @@ COPY --from=source /venv /venv
 COPY --from=source /build/packages /app/packages
 COPY --from=source /build/realtime-agent /app/realtime-agent
 COPY --from=source /build/prompts /app/prompts
-COPY --from=source /root/.cache /root/.cache
+
+# Copy pre-downloaded ML models with correct ownership so praxis user can read them.
+# Models are baked in at build time for fast cold starts (no runtime downloads).
+RUN mkdir -p /app/.cache
+COPY --from=source --chown=praxis:praxis /root/.cache /app/.cache
 
 ENV PATH="/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8080
+    PORT=8080 \
+    HF_HOME=/app/.cache/huggingface \
+    HF_HUB_OFFLINE=1 \
+    XDG_CACHE_HOME=/app/.cache
+
+RUN chown -R praxis:praxis /app
 
 USER praxis
 
