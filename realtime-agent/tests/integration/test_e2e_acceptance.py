@@ -29,6 +29,16 @@ def create_access_token(sub: str) -> str:
     return jwt.encode({"sub": sub}, "dummy_secret", algorithm="HS256")
 
 
+def _recv_text(ws, max_skips: int = 20) -> str:
+    """Receive the next text frame, silently skipping binary (TTS audio) frames."""
+    for _ in range(max_skips):
+        msg = ws.receive()
+        if "text" in msg:
+            return msg["text"]
+        # binary frame (TTS audio) — skip and keep waiting
+    raise AssertionError("No text frame received after skipping binary frames")
+
+
 _USER_ID = "00000000-0000-0000-0000-000000000000"
 _CANDIDATE_ID = "70733de4-b0e3-46f6-b9c5-0bf25dde6f75"
 _SESSION_ID = "f2b48ce0-1668-42a4-aea5-0aca2954901f"
@@ -170,7 +180,7 @@ async def test_full_session_lifecycle(e2e_db, patch_auth, monkeypatch):
         with client.websocket_connect(f"/ws/sessions/{_SESSION_ID}?token={token}") as ws:
             # --- Phase 1: receive initial session flow until first question ---
             for _ in range(10):
-                raw = ws.receive_text()
+                raw = _recv_text(ws)
                 data = json.loads(raw)
                 events_received.append(data["type"])
                 if data["type"] == "interviewer.text":
@@ -193,7 +203,7 @@ async def test_full_session_lifecycle(e2e_db, patch_auth, monkeypatch):
 
             # Wait for scoring + next question
             for _ in range(15):
-                raw = ws.receive_text()
+                raw = _recv_text(ws)
                 data = json.loads(raw)
                 events_received.append(data["type"])
                 if data["type"] == "turn.scoring_result":
@@ -206,7 +216,7 @@ async def test_full_session_lifecycle(e2e_db, patch_auth, monkeypatch):
             ws.send_text(json.dumps({"type": "session.end"}))
 
             for _ in range(10):
-                raw = ws.receive_text()
+                raw = _recv_text(ws)
                 data = json.loads(raw)
                 events_received.append(data["type"])
                 if data["type"] == "debrief.ready":
