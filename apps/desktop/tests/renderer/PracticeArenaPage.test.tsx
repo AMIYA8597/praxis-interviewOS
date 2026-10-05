@@ -3,6 +3,15 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PracticeArenaPage } from '../../src/renderer/pages/PracticeArenaPage';
 import '@testing-library/jest-dom';
 
+// Mock supabase to return a valid session
+jest.mock('../../src/renderer/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: jest.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } }),
+    },
+  },
+}));
+
 global.fetch = jest.fn(() =>
   Promise.resolve({
     ok: true,

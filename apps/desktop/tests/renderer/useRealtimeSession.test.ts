@@ -1,5 +1,14 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRealtimeSession } from '../../src/renderer/hooks/useRealtimeSession';
+
+// Mock supabase so auth.getSession resolves immediately without a network call
+jest.mock('../../src/renderer/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: jest.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } }),
+    },
+  },
+}));
 
 let mockWsInstance: any = null;
 
@@ -31,10 +40,11 @@ describe('useRealtimeSession', () => {
     addEventListenerSpy.mockRestore();
   });
 
-  it('dispatches identical event names for coaching.metrics', () => {
+  it('dispatches identical event names for coaching.metrics', async () => {
     renderHook(() => useRealtimeSession('test-session'));
 
-    expect(mockWsInstance).not.toBeNull();
+    // initWS is async (awaits supabase.auth.getSession), so wait for WS creation
+    await waitFor(() => expect(mockWsInstance).not.toBeNull());
 
     // Simulate incoming message
     act(() => {
@@ -49,10 +59,10 @@ describe('useRealtimeSession', () => {
     expect(event.detail.wpm).toBe(150);
   });
 
-  it('dispatches identical event names for state.transitioned', () => {
+  it('dispatches identical event names for state.transitioned', async () => {
     renderHook(() => useRealtimeSession('test-session'));
 
-    expect(mockWsInstance).not.toBeNull();
+    await waitFor(() => expect(mockWsInstance).not.toBeNull());
 
     act(() => {
       mockWsInstance.onmessage({

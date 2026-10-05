@@ -9,6 +9,7 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
+  setupFiles: ['./jest.setup.js'],
   moduleNameMapper: {
     '^react$': require.resolve('react'),
     '^react/(.*)$': `${reactDir}/$1`,
