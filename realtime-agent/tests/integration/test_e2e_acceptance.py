@@ -53,7 +53,7 @@ async def e2e_db(monkeypatch):
         for stmt in [
             "CREATE TABLE candidates (id TEXT, profile_id TEXT, full_name TEXT)",
             "CREATE TABLE jobs (id TEXT)",
-            "CREATE TABLE job_blueprints (job_id TEXT, summary TEXT)",
+            "CREATE TABLE job_blueprints (job_id TEXT, summary TEXT, likely_topics TEXT DEFAULT '[]', prep_pack TEXT DEFAULT '[]')",
             "CREATE TABLE practice_sessions (id TEXT, candidate_id TEXT, job_id TEXT, status TEXT, started_at TEXT, ended_at TEXT)",
             "CREATE TABLE session_debriefs (id TEXT, session_id TEXT UNIQUE, headline_metrics TEXT, strengths TEXT, weaknesses TEXT, flagged_claims TEXT, jd_coverage TEXT, generated_at TEXT)",
             "CREATE TABLE transcript_segments (session_id TEXT, role TEXT, text TEXT, start_ms REAL, end_ms REAL, confidence REAL, source TEXT)",
