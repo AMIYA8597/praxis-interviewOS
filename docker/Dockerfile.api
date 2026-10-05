@@ -1,0 +1,85 @@
+# syntax=docker/dockerfile:1.7
+# ── praxis-api production image ───────────────────────────────────────────────
+# Build context: repository ROOT (not backend/).
+# This is required because backend depends on packages/config and packages/ai-gateway.
+#
+# Build:
+#   docker build -f docker/Dockerfile.api -t praxis-api:latest .
+# Run:
+#   docker run --env-file .env -p 8000:8000 praxis-api:latest
+
+# ── Stage 1: dependency resolver ──────────────────────────────────────────────
+FROM python:3.11.11-slim AS deps
+
+WORKDIR /build
+
+# Install build tools needed only for compiling C extensions.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only dependency manifests first (layer-cache friendly).
+COPY requirements-lock.txt ./
+COPY packages/config/pyproject.toml packages/config/
+COPY packages/ai-gateway/pyproject.toml packages/ai-gateway/
+COPY backend/pyproject.toml backend/
+
+# Install all dependencies into a venv.
+RUN python -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip==24.3.1 && \
+    pip install --no-cache-dir -r requirements-lock.txt
+
+# ── Stage 2: source copier ────────────────────────────────────────────────────
+FROM deps AS source
+
+# Copy local packages and install as editable.
+COPY packages/ packages/
+COPY backend/ backend/
+RUN pip install --no-cache-dir -e packages/config -e packages/ai-gateway -e backend
+
+# Copy prompts used at runtime.
+COPY prompts/ prompts/
+
+# ── Stage 3: production runtime ───────────────────────────────────────────────
+FROM python:3.11.11-slim AS production
+
+# Runtime system deps only.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    tesseract-ocr \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r praxis && useradd -r -g praxis praxis
+
+WORKDIR /app
+
+# Copy venv and source from previous stages.
+COPY --from=source /venv /venv
+COPY --from=source /build/packages /app/packages
+COPY --from=source /build/backend /app/backend
+COPY --from=source /build/prompts /app/prompts
+
+ENV PATH="/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8000
+
+USER praxis
+
+EXPOSE 8000
+
+# Startup probe endpoint: GET /health
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -fsS http://localhost:${PORT}/health || exit 1
+
+# Graceful shutdown: uvicorn handles SIGTERM with --timeout-graceful-shutdown.
+CMD ["sh", "-c", "uvicorn backend.app.main:app \
+    --host 0.0.0.0 \
+    --port ${PORT} \
+    --workers 1 \
+    --timeout-graceful-shutdown 30 \
+    --log-config /dev/null \
+    --no-access-log"]

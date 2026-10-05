@@ -12,7 +12,6 @@ import httpx
 import jwt
 import pytest
 import pytest_asyncio
-import respx
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from backend.app import auth as auth_module
@@ -120,11 +119,10 @@ async def test_missing_authorization_header_returns_401(client):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_rs256_jwks_verification_and_key_rotation(client):
+async def test_rs256_jwks_verification_and_key_rotation(client, respx_mock):
     old_key, old_jwk = _rsa_jwk("key-1")
     new_key, new_jwk = _rsa_jwk("key-2")
-    route = respx.get(JWKS_URL).mock(return_value=httpx.Response(200, json={"keys": [old_jwk]}))
+    route = respx_mock.get(JWKS_URL).mock(return_value=httpx.Response(200, json={"keys": [old_jwk]}))
 
     token1 = jwt.encode(_claims(), old_key, algorithm="RS256", headers={"kid": "key-1"})
     assert (await _me(client, token1)).status_code == 200
@@ -148,9 +146,8 @@ async def test_rs256_jwks_verification_and_key_rotation(client):
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_jwks_outage_is_503_not_500(client):
-    respx.get(JWKS_URL).mock(return_value=httpx.Response(500))
+async def test_jwks_outage_is_503_not_500(client, respx_mock):
+    respx_mock.get(JWKS_URL).mock(return_value=httpx.Response(500))
     key, _ = _rsa_jwk("key-1")
     token = jwt.encode(_claims(), key, algorithm="RS256", headers={"kid": "key-1"})
     resp = await _me(client, token)

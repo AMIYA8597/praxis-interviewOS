@@ -11,3 +11,15 @@ asyncio_mode = "auto"
 markers = [
     "live_provider: mark a test as hitting a real AI provider"
 ]
+
+# ── uv workspace ──────────────────────────────────────────────────────────────
+# Run `uv sync` from the repository root to install all packages reproducibly.
+# The generated uv.lock file pins every transitive dependency.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+praxis-config = { path = "packages/config", editable = true }
+praxis-ai-gateway = { path = "packages/ai-gateway", editable = true }
+praxis-backend = { path = "backend", editable = true }
+praxis-realtime-agent = { path = "realtime-agent", editable = true }

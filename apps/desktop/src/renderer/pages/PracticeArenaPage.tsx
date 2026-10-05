@@ -21,7 +21,8 @@ export function PracticeArenaPage() {
         return;
       }
 
-      const apiUrl = (typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined) || 'http://localhost:8000';
+      const apiUrl = (typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined)
+        || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : '');
       const modeData = JSON.parse(modePayload);
       const response = await fetch(`${apiUrl}/api/v1/sessions`, {
         method: 'POST',

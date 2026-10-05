@@ -1,7 +1,7 @@
 import logging
 import pathlib
 
-_PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[5]
+_PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[4]
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 
@@ -207,7 +207,7 @@ class InterviewSession:
             call_result = await gateway_router.route(
                 "deep_reasoning",
                 routing_ctx,
-                "structured",
+                "generate_structured",
                 messages=[m.model_dump(exclude_none=True) for m in builder.build()],
                 schema=PolicyDecision
             )
