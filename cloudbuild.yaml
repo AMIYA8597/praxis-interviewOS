@@ -7,6 +7,7 @@ substitutions:
   _REGION: us-central1
   _REGISTRY: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/praxis
   _IMAGE_TAG: ${SHORT_SHA}
+  _STAGING_API_URL: ""  # set by Cloud Build trigger or pass via --substitutions
 
 steps:
   # ── Build images in parallel ───────────────────────────────────────────────
@@ -112,13 +113,16 @@ steps:
   - id: staging-smoke-test
     name: python:3.11-slim
     entrypoint: bash
+    env:
+      - STAGING_API_URL=${_STAGING_API_URL}
     args:
       - -c
       - |
         pip install -q httpx
         python - <<'EOF'
         import httpx, sys, os
-        base = os.environ.get("STAGING_API_URL", "https://api.staging.praxis.example.com")
+        base = os.environ.get("STAGING_API_URL", "")
+        assert base, "STAGING_API_URL not set — pass via Cloud Build trigger substitution _STAGING_API_URL"
         r = httpx.get(f"{base}/health", timeout=30)
         assert r.status_code == 200, f"Health check failed: {r.status_code}"
         print(f"Staging health check passed: {r.json()}")

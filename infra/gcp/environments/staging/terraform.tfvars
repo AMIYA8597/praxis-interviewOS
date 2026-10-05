@@ -3,7 +3,7 @@ project_id                = "praxis-staging"
 region                    = "us-central1"
 environment               = "staging"
 artifact_registry_project = "praxis-production"  # shared registry
-image_tag                 = "latest"  # overridden by CI pipeline with actual sha
+image_tag                 = "REPLACE_WITH_SHA"  # CI pipeline sets this to ${SHORT_SHA}; never apply manually with this placeholder
 
 api_min_instances      = 0  # scale to zero in staging to save cost
 api_max_instances      = 3
