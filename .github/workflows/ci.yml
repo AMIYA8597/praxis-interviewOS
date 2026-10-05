@@ -193,6 +193,10 @@ jobs:
         cd apps/desktop && pnpm run typecheck || npx tsc --noEmit
         cd ../web && npx tsc --noEmit
 
+    - name: Web Lint
+      run: |
+        cd apps/web && pnpm run lint
+
   secrets-scan:
     runs-on: ubuntu-latest
     steps:
