@@ -65,7 +65,7 @@ async def e2e_db(monkeypatch):
             "CREATE TABLE jobs (id TEXT)",
             "CREATE TABLE job_blueprints (job_id TEXT, summary TEXT, likely_topics TEXT DEFAULT '[]', prep_pack TEXT DEFAULT '[]')",
             "CREATE TABLE practice_sessions (id TEXT, candidate_id TEXT, job_id TEXT, status TEXT, started_at TEXT, ended_at TEXT, difficulty TEXT DEFAULT 'standard', interview_type TEXT DEFAULT 'technical')",
-            "CREATE TABLE session_debriefs (id TEXT, session_id TEXT UNIQUE, headline_metrics TEXT, strengths TEXT, weaknesses TEXT, flagged_claims TEXT, jd_coverage TEXT, generated_at TEXT)",
+            "CREATE TABLE session_debriefs (id TEXT, session_id TEXT UNIQUE, headline_metrics TEXT, strengths TEXT, weaknesses TEXT, flagged_claims TEXT, jd_coverage TEXT, generated_at TEXT, created_at TEXT, updated_at TEXT)",
             "CREATE TABLE transcript_segments (session_id TEXT, role TEXT, text TEXT, start_ms REAL, end_ms REAL, confidence REAL, source TEXT)",
             "CREATE TABLE session_state_log (id TEXT PRIMARY KEY, session_id TEXT, from_state TEXT, to_state TEXT, reason TEXT, created_at TEXT)",
             "CREATE TABLE session_turns (id TEXT, session_id TEXT, turn_index INT, speaker TEXT, parent_turn_id TEXT, text TEXT, started_at TEXT, ended_at TEXT)",

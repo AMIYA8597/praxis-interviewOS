@@ -33,7 +33,7 @@ async def setup_db(monkeypatch):
         await conn.execute(text("CREATE TABLE jobs (id TEXT)"))
         await conn.execute(text("CREATE TABLE job_blueprints (job_id TEXT, summary TEXT)"))
         await conn.execute(text("CREATE TABLE practice_sessions (id TEXT, candidate_id TEXT, job_id TEXT, status TEXT, started_at TEXT, ended_at TEXT)"))
-        await conn.execute(text("CREATE TABLE session_debriefs (id TEXT, session_id TEXT, headline_metrics TEXT, strengths TEXT, weaknesses TEXT, flagged_claims TEXT, jd_coverage TEXT, generated_at TEXT)"))
+        await conn.execute(text("CREATE TABLE session_debriefs (id TEXT, session_id TEXT, headline_metrics TEXT, strengths TEXT, weaknesses TEXT, flagged_claims TEXT, jd_coverage TEXT, generated_at TEXT, created_at TEXT, updated_at TEXT)"))
         await conn.execute(text("CREATE TABLE transcript_segments (session_id TEXT, role TEXT, text TEXT, start_ms REAL, end_ms REAL, confidence REAL, source TEXT)"))
         await conn.execute(text("CREATE TABLE session_state_logs (session_id TEXT, from_state TEXT, to_state TEXT, reason TEXT, created_at TEXT)"))
         await conn.execute(text("CREATE TABLE session_turns (id TEXT, session_id TEXT, turn_index INT, speaker TEXT, parent_turn_id TEXT, text TEXT, started_at TEXT, ended_at TEXT)"))
