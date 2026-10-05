@@ -1,5 +1,4 @@
 """Smoke tests for the question bank API routes."""
-import pytest
 
 
 def test_domains_requires_auth(test_client):
