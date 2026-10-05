@@ -22,12 +22,11 @@ CREATE TABLE IF NOT EXISTS ai_provider_call_log (
 ALTER TABLE ai_provider_call_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_provider_call_log FORCE ROW LEVEL SECURITY;
 
--- Admins can read all; candidates can read their own
+-- Candidates can read their own AI call logs
 CREATE POLICY "own_ai_calls"
   ON ai_provider_call_log FOR SELECT
   USING (
     candidate_id IN (SELECT id FROM candidates WHERE profile_id = auth.uid())
-    OR auth.uid() IN (SELECT profile_id FROM candidates WHERE role = 'admin')
   );
 
 CREATE INDEX IF NOT EXISTS idx_ai_log_session ON ai_provider_call_log(session_id);
