@@ -1,4 +1,3 @@
-from packages.config.settings import PROJECT_ROOT
 import logging
 from typing import Dict
 
