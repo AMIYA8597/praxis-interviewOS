@@ -147,7 +147,11 @@ async def run_migrations(database_url: str) -> None:
     try:
         n = await apply_async(conn)
     except Exception as e:
+        import traceback
         print(f"Migration failed: {e}", file=sys.stderr)
+        if e.__cause__:
+            print(f"Caused by: {e.__cause__}", file=sys.stderr)
+            traceback.print_exception(type(e.__cause__), e.__cause__, e.__cause__.__traceback__, file=sys.stderr)
         sys.exit(1)
     finally:
         await conn.close()
