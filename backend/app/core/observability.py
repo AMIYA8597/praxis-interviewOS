@@ -7,7 +7,6 @@ No PII (tokens, passwords, audio content, raw resume text) is logged.
 """
 import json
 import logging
-import os
 import time
 import uuid
 from contextvars import ContextVar

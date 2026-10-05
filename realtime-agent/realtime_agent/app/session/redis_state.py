@@ -13,7 +13,7 @@ Key design decisions:
 """
 import json
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
