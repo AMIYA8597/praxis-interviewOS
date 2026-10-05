@@ -70,7 +70,7 @@ async def e2e_db(monkeypatch):
             "CREATE TABLE session_state_log (id TEXT PRIMARY KEY, session_id TEXT, from_state TEXT, to_state TEXT, reason TEXT, created_at TEXT)",
             "CREATE TABLE session_turns (id TEXT, session_id TEXT, turn_index INT, speaker TEXT, parent_turn_id TEXT, text TEXT, started_at TEXT, ended_at TEXT)",
             "CREATE TABLE turn_scores (id TEXT, turn_id TEXT, overall REAL, rationale TEXT, relevance REAL, correctness REAL, structure REAL, grounding REAL, specificity REAL, conciseness REAL)",
-            "CREATE TABLE session_claims (id TEXT, session_id TEXT, turn_id TEXT, claim_text TEXT, supported BOOLEAN)",
+            "CREATE TABLE session_claims (id TEXT, session_id TEXT, turn_id TEXT, claim_text TEXT, supported BOOLEAN, contradiction_of_claim_id TEXT)",
         ]:
             await conn.execute(text(stmt))
 
