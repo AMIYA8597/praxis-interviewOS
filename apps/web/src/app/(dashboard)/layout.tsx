@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { LayoutDashboard, Users, Briefcase, Target, Activity, Settings, LogOut, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Target, Activity, Settings, LogOut, Loader2, BarChart2, ClipboardList } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -59,6 +59,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const navItems = [
     { name: 'Analytics', href: '/analytics', icon: Activity },
+    { name: 'Readiness', href: '/readiness', icon: BarChart2 },
+    { name: 'Sessions', href: '/sessions', icon: ClipboardList },
     { name: 'Candidates', href: '/candidates', icon: Users },
     { name: 'Study Workbench', href: '/study', icon: Target },
     { name: 'Job Matches', href: '/platform/tracker', icon: Briefcase },

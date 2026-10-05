@@ -1,5 +1,7 @@
-from packages.config.settings import PROJECT_ROOT
 import logging
+import pathlib
+
+_PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[5]
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
 
@@ -86,7 +88,8 @@ class InterviewSession:
         self.is_warmed_up = False
         
         # Load the core interviewer system prompt
-        with open(str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/interviewer/system_v1.md")), "r") as f:
+        _prompt_path = _PROJECT_ROOT / "prompts/interviewer/system_v1.md"
+        with open(str(_prompt_path), "r") as f:
             self.system_prompt = f.read()
 
     def warm_up(self):

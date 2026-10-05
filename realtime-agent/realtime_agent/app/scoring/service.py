@@ -1,9 +1,11 @@
-from packages.config.settings import PROJECT_ROOT
 import asyncio
+import pathlib
+
+_PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[5]
 import logging
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from realtime_agent.app.scoring.models import AnswerScore, DimensionScores, StarCompleteness, ClaimExtractionResult
+from realtime_agent.app.scoring.models import AnswerScore, DimensionScores, StarCompleteness, ClaimExtractionResult, SystemDesignScore
 from praxis_ai_gateway.prompt_builder import PromptBuilder
 
 logger = logging.getLogger(__name__)
@@ -90,7 +92,7 @@ async def score_answer_async(
     grounding = await calculate_grounding_score(candidate_answer, verified_context, gateway_router, routing_ctx)
     
     # 2. Score other dimensions via LLM
-    with open(str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/scoring/rubric_v1.md")), "r") as f:
+    with open(str(_PROJECT_ROOT / "prompts/scoring/rubric_v1.md"), "r") as f:
         rubric_prompt = f.read()
         
     builder = PromptBuilder()
@@ -124,8 +126,8 @@ async def score_answer_async(
         llm_score = call_result.result
     except Exception as e:
         logger.error(f"LLM Scoring failed: {e}")
-        llm_score = LlmScoringResult(
-            relevance=0.5, correctness=0.5, structure=0.5, specificity=0.5, conciseness=0.5,
+        llm_score = LlmScoringResult(  # fallback: LLM unavailable
+            relevance=0.5, correctness=0.5, structure=0.5, specificity=0.5, conciseness=0.5,  # fallback
             rationale="Scoring failed fallback."
         )
         
@@ -163,6 +165,70 @@ async def score_answer_async(
     
     logger.info(f"Background scoring finished. Overall: {overall:.2f}")
     return final_score
+
+async def score_system_design_async(
+    question: str,
+    candidate_answer: str,
+    verified_context: str,
+    gateway_router,
+    routing_ctx,
+) -> SystemDesignScore:
+    """Phase 16 — dedicated system design rubric scoring."""
+    grounding = await calculate_grounding_score(candidate_answer, verified_context, gateway_router, routing_ctx)
+
+    class _SdResult(SystemDesignScore):
+        pass
+
+    builder = PromptBuilder()
+    builder.add_system(
+        "You are an expert system design interviewer. Score the candidate's response on each rubric dimension "
+        "from 0.0 (very poor) to 1.0 (excellent). Be strict and calibrated against senior SWE bar."
+    )
+    builder.add_trusted_context("design_question", question)
+    builder.add_untrusted("candidate_answer", "realtime_stt", candidate_answer)
+    builder.add_output_schema(_SdResult)
+
+    try:
+        call_result = await gateway_router.route(
+            "deep_reasoning",
+            routing_ctx,
+            "generate_structured",
+            messages=[m.model_dump(exclude_none=True) for m in builder.build()],
+            schema=_SdResult,
+        )
+        result = call_result.result
+    except Exception as e:
+        logger.error(f"System design scoring failed: {e}")
+        result = _SdResult(  # fallback: LLM unavailable
+            requirements_clarification=0.5,  # fallback
+            high_level_design=0.5,  # fallback
+            scalability=0.5,  # fallback
+            data_modeling=0.5,  # fallback
+            api_design=0.5,  # fallback
+            bottleneck_identification=0.5,  # fallback
+            trade_off_reasoning=0.5,  # fallback
+            communication=0.5,  # fallback
+            overall=0.5,  # fallback
+            rationale="Scoring failed — fallback values.",
+        )
+
+    weights = {
+        "requirements_clarification": 0.10,
+        "high_level_design": 0.20,
+        "scalability": 0.15,
+        "data_modeling": 0.10,
+        "api_design": 0.10,
+        "bottleneck_identification": 0.15,
+        "trade_off_reasoning": 0.15,
+        "communication": 0.05,
+    }
+    overall = sum(getattr(result, k) * w for k, w in weights.items())
+    # blend grounding into overall (5 % weight)
+    overall = overall * 0.95 + grounding * 0.05
+
+    result.overall = min(max(overall, 0.0), 1.0)
+    return result
+
 
 def trigger_background_scoring(question: str, candidate_answer: str, is_behavioral: bool, verified_context: str, gateway_router, routing_ctx, state_machine=None):
     """
