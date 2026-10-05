@@ -21,8 +21,11 @@ export function useRealtimeSession(sessionId: string) {
       const token = session?.access_token || ''; 
       
       // process.env is set by Electron/Vite; safe for Jest (no import.meta in test context)
-      const envUrl = typeof process !== 'undefined' && process.env.VITE_WS_URL ? process.env.VITE_WS_URL : undefined;
-      const wsUrl = `${envUrl || 'ws://localhost:8001'}/ws/sessions/${sessionId}`;
+      const envUrl = (typeof process !== 'undefined' && process.env.VITE_REALTIME_URL)
+        || (typeof import.meta !== 'undefined' && (import.meta as { env?: Record<string, string> }).env?.VITE_REALTIME_URL)
+        || (process.env.NODE_ENV === 'development' ? 'ws://localhost:8080' : '');
+      if (!envUrl) throw new Error('VITE_REALTIME_URL is not configured for production');
+      const wsUrl = `${envUrl}/ws/sessions/${sessionId}`;
       
       wsRef.current = new WebSocket(wsUrl);
       

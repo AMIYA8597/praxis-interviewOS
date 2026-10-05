@@ -37,7 +37,8 @@ export function PreflightCheck({ onReady, onCancel }: { onReady: (mode: string) 
       
       // Check backend
       try {
-        const apiUrl = (typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined) || 'http://localhost:8000';
+        const apiUrl = (typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined)
+          || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : '');
         const res = await fetch(`${apiUrl}/api/v1/health`);
         newStatus.backend = res.ok;
       } catch (e) {
