@@ -107,12 +107,12 @@ async def _authenticate(websocket: WebSocket, query_token: Optional[str]) -> Dic
 
 
 async def _load_session(factory, session_id: str, user_id: str) -> Optional[Dict[str, Any]]:
-    """Ownership-checked lookup. Optional enrichment never blocks the session."""
+    """Ownership-checked lookup. Full grounding context loaded for candidate & JD."""
     async with factory() as db:
         row = (
             await db.execute(
                 text("""
-                    SELECT s.id, s.status, s.candidate_id
+                    SELECT s.id, s.status, s.candidate_id, s.job_id
                     FROM practice_sessions s
                     JOIN candidates c ON s.candidate_id = c.id
                     WHERE s.id = :sid AND c.profile_id = :uid
@@ -122,20 +122,47 @@ async def _load_session(factory, session_id: str, user_id: str) -> Optional[Dict
         ).first()
         if row is None:
             return None
+        candidate_id = str(row.candidate_id)
+        job_id = str(row.job_id) if getattr(row, "job_id", None) else None
+
+        candidate_profile: Dict[str, Any] = {
+            "id": candidate_id,
+            "name": "Candidate",
+            "summary": "",
+            "verified_skills": [],
+            "technologies": [],
+            "projects": [],
+            "work_experience": [],
+            "claims": [],
+            "verified_facts": [],
+        }
+
+        jd_blueprint: Dict[str, Any] = {
+            "target_role": "Software Engineer",
+            "requirements": [],
+            "summary": "",
+            "likely_topics": [],
+            "prep_pack": [],
+        }
+
         info: Dict[str, Any] = {
             "status": row.status,
-            "candidate_id": str(row.candidate_id),
+            "candidate_id": candidate_id,
             "candidate_name": "Candidate",
-            "jd_blueprint": {},
+            "candidate_profile": candidate_profile,
+            "jd_blueprint": jd_blueprint,
         }
+
+        # 1. Base details from practice_sessions and candidates
         try:
             extra = (
                 await db.execute(
                     text("""
                         SELECT c.full_name, b.summary, b.likely_topics, b.prep_pack,
-                               s.difficulty, s.interview_type
+                               s.difficulty, s.interview_type, j.role_title, j.company_name
                         FROM practice_sessions s
                         JOIN candidates c ON s.candidate_id = c.id
+                        LEFT JOIN jobs j ON s.job_id = j.id
                         LEFT JOIN job_blueprints b ON s.job_id = b.job_id
                         WHERE s.id = :sid
                     """),
@@ -144,22 +171,166 @@ async def _load_session(factory, session_id: str, user_id: str) -> Optional[Dict
             ).first()
             if extra is not None:
                 info["candidate_name"] = extra.full_name or "Candidate"
+                candidate_profile["name"] = info["candidate_name"]
                 prep = extra.prep_pack
                 if isinstance(prep, str):
                     try:
                         prep = json.loads(prep)
                     except ValueError:
                         prep = []
-                info["jd_blueprint"] = {
-                    "summary": extra.summary,
-                    "likely_topics": list(extra.likely_topics or []),
-                    "prep_pack": prep if isinstance(prep, list) else [],
-                }
+                jd_blueprint["summary"] = extra.summary or ""
+                jd_blueprint["likely_topics"] = list(extra.likely_topics or [])
+                jd_blueprint["prep_pack"] = prep if isinstance(prep, list) else []
+                if getattr(extra, "role_title", None):
+                    jd_blueprint["target_role"] = extra.role_title
+                if getattr(extra, "company_name", None):
+                    jd_blueprint["company_name"] = extra.company_name
                 info["difficulty"] = extra.difficulty
                 info["interview_type"] = extra.interview_type
         except Exception as e:
-            logger.info("session_enrichment_unavailable", extra={"error_type": str(e)})
-            await db.rollback()
+            logger.info("session_base_enrichment_unavailable", extra={"error_type": str(e)})
+
+        # 2. Verified skills
+        try:
+            skills_res = await db.execute(
+                text("""
+                    SELECT s.name, cs.proficiency, cs.years_used
+                    FROM candidate_skills cs
+                    JOIN skills s ON cs.skill_id = s.id
+                    WHERE cs.candidate_id = :cid
+                """),
+                {"cid": candidate_id},
+            )
+            candidate_profile["verified_skills"] = [r.name for r in skills_res.fetchall()]
+        except Exception as e:
+            logger.debug("skills_enrichment_unavailable", extra={"error": str(e)})
+
+        # 3. Projects and technologies
+        try:
+            proj_res = await db.execute(
+                text("""
+                    SELECT name, summary, problem, architecture, tech_stack, business_impact, personal_contribution
+                    FROM candidate_projects
+                    WHERE candidate_id = :cid
+                """),
+                {"cid": candidate_id},
+            )
+            projects = []
+            technologies = set()
+            for p_row in proj_res.fetchall():
+                tech = list(p_row.tech_stack or [])
+                technologies.update(tech)
+                projects.append({
+                    "name": p_row.name,
+                    "description": p_row.summary or p_row.problem or "",
+                    "architecture": p_row.architecture or "",
+                    "tech_stack": tech,
+                    "personal_contribution": p_row.personal_contribution or "",
+                    "verified_by_user": True,
+                    "status": "VERIFIED",
+                })
+            candidate_profile["projects"] = projects
+            candidate_profile["technologies"] = list(technologies)
+        except Exception as e:
+            logger.debug("projects_enrichment_unavailable", extra={"error": str(e)})
+
+        # 4. Work Experience
+        try:
+            exp_res = await db.execute(
+                text("""
+                    SELECT company, title, description, achievements, start_date, end_date
+                    FROM candidate_experiences
+                    WHERE candidate_id = :cid
+                    ORDER BY start_date DESC
+                """),
+                {"cid": candidate_id},
+            )
+            experiences = []
+            for e_row in exp_res.fetchall():
+                duration = f"{e_row.start_date} - {e_row.end_date or 'Present'}"
+                experiences.append({
+                    "role": e_row.title,
+                    "company": e_row.company,
+                    "duration": duration,
+                    "details": e_row.description or "",
+                    "achievements": list(e_row.achievements or []),
+                })
+            candidate_profile["work_experience"] = experiences
+        except Exception as e:
+            logger.debug("experience_enrichment_unavailable", extra={"error": str(e)})
+
+        # 5. Verified Resume Claims with Provenance
+        try:
+            claims_res = await db.execute(
+                text("""
+                    SELECT rc.claim_text, rc.claim_type, rc.page, rc.char_start, rc.char_end,
+                           rc.verified_by_user, rc.extraction_confidence
+                    FROM resume_claims rc
+                    JOIN resume_versions rv ON rc.resume_version_id = rv.id
+                    JOIN resumes r ON rv.resume_id = r.id
+                    WHERE r.candidate_id = :cid
+                """),
+                {"cid": candidate_id},
+            )
+            claims = []
+            for c_row in claims_res.fetchall():
+                prov = f"page {c_row.page}, chars {c_row.char_start}-{c_row.char_end}" if c_row.page is not None else "resume"
+                is_verified = bool(c_row.verified_by_user)
+                claims.append({
+                    "claim_text": c_row.claim_text,
+                    "claim_type": c_row.claim_type,
+                    "classification": "Supported" if is_verified else "Uncertain",
+                    "evidence": f"Verified by candidate ({prov})" if is_verified else f"Extracted ({prov})",
+                    "provenance": {"page": c_row.page, "char_start": c_row.char_start, "char_end": c_row.char_end},
+                    "verified_by_user": is_verified,
+                })
+            candidate_profile["claims"] = claims
+        except Exception as e:
+            logger.debug("claims_enrichment_unavailable", extra={"error": str(e)})
+
+        # 6. Verified Resume Facts (Document Chunks)
+        try:
+            chunks_res = await db.execute(
+                text("""
+                    SELECT dc.content
+                    FROM documents d
+                    JOIN document_chunks dc ON dc.document_id = d.id
+                    WHERE d.candidate_id = :cid AND d.kind = 'resume'
+                    ORDER BY dc.chunk_index ASC
+                    LIMIT 10
+                """),
+                {"cid": candidate_id},
+            )
+            facts = [r.content for r in chunks_res.fetchall() if r.content]
+            candidate_profile["verified_facts"] = facts
+            if facts and not candidate_profile["summary"]:
+                candidate_profile["summary"] = facts[0][:500]
+        except Exception as e:
+            logger.debug("facts_enrichment_unavailable", extra={"error": str(e)})
+
+        # 7. JD Requirements
+        if job_id:
+            try:
+                reqs_res = await db.execute(
+                    text("""
+                        SELECT jr.skill_text, jr.category, jr.priority, jr.evidence_quote
+                        FROM job_requirements jr
+                        JOIN job_blueprints jb ON jr.job_blueprint_id = jb.id
+                        WHERE jb.job_id = :jid
+                    """),
+                    {"jid": job_id},
+                )
+                req_list = []
+                for r_row in reqs_res.fetchall():
+                    priority_label = f"[{r_row.priority}] " if r_row.priority else ""
+                    req_list.append(f"{priority_label}{r_row.skill_text}")
+                if req_list:
+                    jd_blueprint["requirements"] = req_list
+            except Exception as e:
+                logger.debug("jd_requirements_enrichment_unavailable", extra={"error": str(e)})
+
+        info["candidate_profile"] = candidate_profile
+        info["jd_blueprint"] = jd_blueprint
         return info
 
 
@@ -351,9 +522,10 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
         enqueue_event_cb=enqueue_event,
     )
     interview_kwargs = {k: info[k] for k in ("difficulty", "interview_type") if info.get(k)}
+    candidate_profile = info.get("candidate_profile") or {"id": info["candidate_id"], "name": info["candidate_name"]}
     interview_session = InterviewSession(
         jd_blueprint=info["jd_blueprint"],
-        candidate_profile={"id": info["candidate_id"], "name": info["candidate_name"]},
+        candidate_profile=candidate_profile,
         **interview_kwargs,
     )
     orchestrator = SessionOrchestrator(
