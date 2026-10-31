@@ -5,8 +5,13 @@ Retry / dead-letter policy: each job is wrapped by
 `backend.app.worker_tasks.job`, which retries transient failures with
 exponential backoff (5s, 10s, ...) up to WORKER_MAX_TRIES and records the
 final failure in `failed_jobs`.
+
+Includes a lightweight HTTP health listener on PORT (default 8080) to
+satisfy Cloud Run health probes.
 """
+import asyncio
 import logging
+import os
 
 import arq
 from arq.connections import RedisSettings
@@ -69,10 +74,48 @@ async def on_startup(ctx):
     from backend.app.core.storage import get_storage_client
 
     ctx["storage"] = get_storage_client()
+
+    # Start lightweight HTTP health server for Cloud Run
+    health_port = int(os.environ.get("PORT", "8080"))
+
+    async def _health_handler(reader, writer):
+        try:
+            while True:
+                line = await reader.readline()
+                if line in (b"\r\n", b"\n", b""):
+                    break
+            body = b'{"status":"ok","service":"praxis-worker"}\n'
+            resp = (
+                b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                + str(len(body)).encode()
+                + b"\r\nConnection: close\r\n\r\n"
+                + body
+            )
+            writer.write(resp)
+            await writer.drain()
+        except Exception:
+            pass
+        finally:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+    try:
+        health_server = await asyncio.start_server(_health_handler, "0.0.0.0", health_port)
+        ctx["health_server"] = health_server
+        logger.info("worker_health_server_listening", extra={"port": health_port})
+    except Exception as e:
+        logger.warning("worker_health_server_failed", extra={"error": str(e)})
+
     logger.info("worker_ready", extra={"providers": sorted(ctx["providers"])})
 
 
 async def on_shutdown(ctx):
+    if ctx.get("health_server") is not None:
+        ctx["health_server"].close()
+        await ctx["health_server"].wait_closed()
     if ctx.get("redis") is not None:
         await ctx["redis"].aclose()
     if ctx.get("db_engine") is not None:

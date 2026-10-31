@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-lock.txt ./
+COPY docker/requirements/worker.lock ./requirements-lock.txt
 COPY packages/config/pyproject.toml packages/config/
 COPY packages/ai-gateway/pyproject.toml packages/ai-gateway/
 COPY backend/pyproject.toml backend/
@@ -23,19 +23,13 @@ COPY backend/pyproject.toml backend/
 RUN python -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip==24.3.1 && \
-    pip install --no-cache-dir -r requirements-lock.txt
-
-# Sentence transformers for embeddings.
-RUN pip install --no-cache-dir \
-    sentence-transformers==3.3.1 \
-    torch==2.5.1+cpu \
-    --index-url https://download.pytorch.org/whl/cpu
+    pip install --no-cache-dir --require-hashes -r requirements-lock.txt
 
 FROM deps AS source
 
 COPY packages/ packages/
 COPY backend/ backend/
-RUN pip install --no-cache-dir -e packages/config -e packages/ai-gateway -e backend
+RUN pip install --no-cache-dir --no-deps packages/config packages/ai-gateway backend
 
 COPY prompts/ prompts/
 
@@ -57,11 +51,18 @@ COPY --from=source /build/backend /app/backend
 COPY --from=source /build/prompts /app/prompts
 
 ENV PATH="/venv/bin:$PATH" \
+    PYTHONPATH="/app:$PYTHONPATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8080
 
 USER praxis
 
-# Workers do not expose HTTP — no HEALTHCHECK needed; Cloud Run uses startup probe.
-# ARQ workers shut down cleanly on SIGTERM by default.
+EXPOSE 8080
+
+# Cloud Run / container healthcheck hitting worker's HTTP health listener
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -fsS http://localhost:${PORT}/health || exit 1
+
+# Workers expose port 8080 health listener via WorkerSettings.on_startup
 CMD ["python", "-m", "arq", "backend.worker_settings.WorkerSettings"]

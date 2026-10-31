@@ -4,7 +4,11 @@
 
 Workers use ARQ (Async Redis Queue) backed by Redis. Each worker instance runs a continuous event loop, polling the ARQ queue and executing jobs concurrently up to `WORKER_MAX_JOBS`.
 
-**Cloud Run Worker Pool** does NOT auto-scale. Instance count is fixed at `worker_instance_count` in Terraform. Scale by changing this variable and re-applying.
+**Cloud Run Service & Health Listener:**
+The worker runs as a Cloud Run Service resource. To satisfy Cloud Run's ingress / container healthcheck requirements and keep instances healthy without crashing or failing startup probes, `backend.worker_settings.WorkerSettings` starts a native asyncio HTTP health server on `PORT` (default 8080) during `on_startup`, responding `200 OK` on `GET /health` and `GET /health/live`. The server gracefully shuts down on `on_shutdown`.
+
+**Scaling Model:**
+Worker instance count is fixed at `worker_instance_count` in Terraform (Cloud Run min/max instance count). Scale by changing this variable and re-applying.
 
 ---
 

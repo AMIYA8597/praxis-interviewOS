@@ -11,11 +11,17 @@ dependencies = [
     "pydantic",
     "PyYAML",
     "httpx",
-    "respx",
     "redis",
     "SQLAlchemy",
-    "tiktoken",
+    "tiktoken"
+]
+
+[project.optional-dependencies]
+embeddings = [
     "sentence-transformers"
+]
+test = [
+    "respx"
 ]
 
 [tool.setuptools.packages.find]

@@ -25,13 +25,15 @@ class ModelSpec:
     compute_type: str    # e.g. "int8", "float16", "float32"
 
 
+_STT_MODEL_NAME = os.environ.get("LOCAL_STT_MODEL", "small")
+
 STT_MODEL = ModelSpec(
-    name="faster-whisper-base.en",
-    version="base.en",
-    source="Systran/faster-whisper-base.en",
+    name=f"faster-whisper-{_STT_MODEL_NAME}",
+    version=_STT_MODEL_NAME,
+    source=f"Systran/faster-whisper-{_STT_MODEL_NAME}",
     license="MIT",
     device="cpu",
-    compute_type="int8",
+    compute_type="float32",
 )
 
 VAD_MODEL = ModelSpec(

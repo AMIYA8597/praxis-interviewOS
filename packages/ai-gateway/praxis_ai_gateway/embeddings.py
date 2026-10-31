@@ -11,13 +11,17 @@ _executor = ThreadPoolExecutor(max_workers=1)
 def _load_model():
     global _model
     if _model is None:
-        from sentence_transformers import SentenceTransformer
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            raise RuntimeError(
+                "sentence-transformers is not installed. Embeddings are computed "
+                "by the praxis-worker background service."
+            )
         _model = SentenceTransformer(EMBEDDING_MODEL_NAME)
 
 def _embed_batch(texts: List[str], normalize: bool, batch_size: int) -> List[List[float]]:
     _load_model()
-    # model.encode returns a numpy array. We need to convert it to a list of lists.
-    # We specify normalize_embeddings explicitly.
     embeddings = _model.encode(texts, batch_size=batch_size, normalize_embeddings=normalize)
     return embeddings.tolist()
 

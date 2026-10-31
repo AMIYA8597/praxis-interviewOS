@@ -20,40 +20,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-lock.txt ./
+COPY docker/requirements/realtime.lock ./requirements-lock.txt
 COPY packages/config/pyproject.toml packages/config/
 COPY packages/ai-gateway/pyproject.toml packages/ai-gateway/
+COPY backend/pyproject.toml backend/
 COPY realtime-agent/pyproject.toml realtime-agent/
 
 RUN python -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 
-# Install CPU-only torch first (avoids pulling CUDA, saves ~3 GB).
 RUN pip install --no-cache-dir --upgrade pip==24.3.1 && \
-    pip install --no-cache-dir \
-        torch==2.5.1+cpu \
-        torchaudio==2.5.1+cpu \
-        --index-url https://download.pytorch.org/whl/cpu
-
-# Install remaining deps excluding sounddevice (server does not capture audio).
-RUN pip install --no-cache-dir -r requirements-lock.txt && \
-    pip install --no-cache-dir \
-        faster-whisper==1.1.0 \
-        silero-vad==5.1.2 \
-        onnxruntime==1.20.1 \
-        librosa==0.10.2
+    pip install --no-cache-dir --require-hashes -r requirements-lock.txt
 
 FROM deps AS source
 
 COPY packages/ packages/
+COPY backend/ backend/
 COPY realtime-agent/ realtime-agent/
-RUN pip install --no-cache-dir -e packages/config -e packages/ai-gateway -e realtime-agent
+RUN pip install --no-cache-dir --no-deps packages/config packages/ai-gateway backend realtime-agent
 
 COPY prompts/ prompts/
 # Pre-download models at build time so cold starts are fast.
 # Models are baked into the image layer — deterministic, no runtime downloads.
-RUN python -c "from faster_whisper import WhisperModel; WhisperModel('base.en', device='cpu', compute_type='int8')" || true
-RUN python -c "import silero_vad; silero_vad.load_silero_vad()" || true
+# Bake exact Whisper small model (matching LOCAL_STT_MODEL default) and silero-vad without || true.
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')"
+RUN python -c "import silero_vad; silero_vad.load_silero_vad()"
 
 FROM python:3.11.11-slim AS production
 
@@ -69,15 +60,16 @@ WORKDIR /app
 
 COPY --from=source /venv /venv
 COPY --from=source /build/packages /app/packages
+COPY --from=source /build/backend /app/backend
 COPY --from=source /build/realtime-agent /app/realtime-agent
 COPY --from=source /build/prompts /app/prompts
 
 # Copy pre-downloaded ML models with correct ownership so praxis user can read them.
-# Models are baked in at build time for fast cold starts (no runtime downloads).
 RUN mkdir -p /app/.cache
 COPY --from=source --chown=praxis:praxis /root/.cache /app/.cache
 
 ENV PATH="/venv/bin:$PATH" \
+    PYTHONPATH="/app:$PYTHONPATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8080 \
@@ -99,4 +91,5 @@ CMD ["sh", "-c", "uvicorn realtime_agent.app.main:app \
     --port ${PORT} \
     --workers 1 \
     --timeout-graceful-shutdown 30 \
+    --log-config /dev/null \
     --no-access-log"]
