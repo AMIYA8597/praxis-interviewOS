@@ -32,8 +32,25 @@ def get_staging_url() -> str:
 
     project = os.environ.get("STAGING_PROJECT", "").strip()
     region = os.environ.get("REGION", "us-central1").strip()
+    smoke_tag = os.environ.get("SMOKE_TAG", "").strip()
     if not project:
         sys.exit("ERROR: set STAGING_API_URL or (STAGING_PROJECT + REGION) environment variables")
+
+    # If smoke_tag is specified, query revision tag URL first
+    if smoke_tag:
+        result = subprocess.run(
+            [
+                "gcloud", "run", "services", "describe", "praxis-api",
+                "--region", region,
+                "--project", project,
+                "--format", f"value(status.traffic[?tag=='{smoke_tag}'].url)",
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        url = result.stdout.strip()
+        if url:
+            print(f"Resolved smoke tagged URL for tag '{smoke_tag}': {url}")
+            return url
 
     result = subprocess.run(
         [

@@ -125,7 +125,7 @@ steps:
 
   # ── Capture immutable image digests ───────────────────────────────────────
   # Digests are stable even if the SHA tag is later re-tagged. They are used
-  # by Terraform for immutable Cloud Run deployments.
+  # by Terraform and Cloud Run deployments for immutable releases.
   - id: capture-digests
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
@@ -133,102 +133,123 @@ steps:
       - -c
       - |
         API_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${_REGISTRY}/praxis-api:${_IMAGE_TAG} 2>/dev/null || \
-          gcloud artifacts docker images describe ${_REGISTRY}/praxis-api:${_IMAGE_TAG} --format='value(image_summary.fully_qualified_digest)' 2>/dev/null || \
-          echo "DIGEST_UNAVAILABLE")
+          gcloud artifacts docker images describe ${_REGISTRY}/praxis-api:${_IMAGE_TAG} --format='value(image_summary.fully_qualified_digest)' 2>/dev/null)
         REALTIME_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${_REGISTRY}/praxis-realtime:${_IMAGE_TAG} 2>/dev/null || \
-          gcloud artifacts docker images describe ${_REGISTRY}/praxis-realtime:${_IMAGE_TAG} --format='value(image_summary.fully_qualified_digest)' 2>/dev/null || \
-          echo "DIGEST_UNAVAILABLE")
+          gcloud artifacts docker images describe ${_REGISTRY}/praxis-realtime:${_IMAGE_TAG} --format='value(image_summary.fully_qualified_digest)' 2>/dev/null)
         WORKER_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${_REGISTRY}/praxis-worker:${_IMAGE_TAG} 2>/dev/null || \
-          gcloud artifacts docker images describe ${_REGISTRY}/praxis-worker:${_IMAGE_TAG} --format='value(image_summary.fully_qualified_digest)' 2>/dev/null || \
-          echo "DIGEST_UNAVAILABLE")
+          gcloud artifacts docker images describe ${_REGISTRY}/praxis-worker:${_IMAGE_TAG} --format='value(image_summary.fully_qualified_digest)' 2>/dev/null)
+
+        if [ -z "$API_DIGEST" ] || [ -z "$REALTIME_DIGEST" ] || [ -z "$WORKER_DIGEST" ]; then
+          echo "ERROR: One or more image digests could not be captured!" >&2
+          echo "API_DIGEST=$API_DIGEST" >&2
+          echo "REALTIME_DIGEST=$REALTIME_DIGEST" >&2
+          echo "WORKER_DIGEST=$WORKER_DIGEST" >&2
+          exit 1
+        fi
+
         cat > /workspace/digests.env << EOF
-        API_IMAGE=${_REGISTRY}/praxis-api:${_IMAGE_TAG}
-        API_DIGEST=$API_DIGEST
-        REALTIME_IMAGE=${_REGISTRY}/praxis-realtime:${_IMAGE_TAG}
-        REALTIME_DIGEST=$REALTIME_DIGEST
-        WORKER_IMAGE=${_REGISTRY}/praxis-worker:${_IMAGE_TAG}
-        WORKER_DIGEST=$WORKER_DIGEST
-        GIT_SHA=${SHORT_SHA}
-        BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        export API_IMAGE=${_REGISTRY}/praxis-api:${_IMAGE_TAG}
+        export API_DIGEST=$API_DIGEST
+        export REALTIME_IMAGE=${_REGISTRY}/praxis-realtime:${_IMAGE_TAG}
+        export REALTIME_DIGEST=$REALTIME_DIGEST
+        export WORKER_IMAGE=${_REGISTRY}/praxis-worker:${_IMAGE_TAG}
+        export WORKER_DIGEST=$WORKER_DIGEST
+        export GIT_SHA=${SHORT_SHA}
+        export BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
         EOF
         cat /workspace/digests.env
     waitFor: [push-cache]
 
-  # ── Deploy to staging ──────────────────────────────────────────────────────
+  # ── Deploy to staging by digest with smoke revision tag ───────────────────
   - id: deploy-staging-api
     name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - praxis-api
-      - --image=${_REGISTRY}/praxis-api:${_IMAGE_TAG}
-      - --region=${_REGION}
-      - --project=${_STAGING_PROJECT}
-      - --quiet
-      - --no-traffic   # new revision gets 0% traffic until smoke passes
+      - -c
+      - |
+        source /workspace/digests.env
+        if [ -z "$API_DIGEST" ]; then echo "Missing API_DIGEST" >&2; exit 1; fi
+        gcloud run deploy praxis-api \
+          --image=$API_DIGEST \
+          --tag=smoke \
+          --no-traffic \
+          --region=${_REGION} \
+          --project=${_STAGING_PROJECT} \
+          --quiet
     waitFor: [capture-digests]
 
   - id: deploy-staging-realtime
     name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - praxis-realtime
-      - --image=${_REGISTRY}/praxis-realtime:${_IMAGE_TAG}
-      - --region=${_REGION}
-      - --project=${_STAGING_PROJECT}
-      - --quiet
-      - --no-traffic
+      - -c
+      - |
+        source /workspace/digests.env
+        if [ -z "$REALTIME_DIGEST" ]; then echo "Missing REALTIME_DIGEST" >&2; exit 1; fi
+        gcloud run deploy praxis-realtime \
+          --image=$REALTIME_DIGEST \
+          --tag=smoke \
+          --no-traffic \
+          --region=${_REGION} \
+          --project=${_STAGING_PROJECT} \
+          --quiet
     waitFor: [capture-digests]
 
   - id: deploy-staging-worker
     name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - praxis-worker
-      - --image=${_REGISTRY}/praxis-worker:${_IMAGE_TAG}
-      - --region=${_REGION}
-      - --project=${_STAGING_PROJECT}
-      - --quiet
-      - --no-traffic
+      - -c
+      - |
+        source /workspace/digests.env
+        if [ -z "$WORKER_DIGEST" ]; then echo "Missing WORKER_DIGEST" >&2; exit 1; fi
+        gcloud run deploy praxis-worker \
+          --image=$WORKER_DIGEST \
+          --tag=smoke \
+          --no-traffic \
+          --region=${_REGION} \
+          --project=${_STAGING_PROJECT} \
+          --quiet
     waitFor: [capture-digests]
 
-  # ── Staging smoke test ─────────────────────────────────────────────────────
-  # Dynamically resolves the staging Cloud Run URL — no hardcoded domain.
+  # ── Staging smoke test (runs from image with gcloud against smoke tag) ─────
   - id: staging-smoke-test
-    name: python:3.11-slim
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: bash
     env:
       - STAGING_PROJECT=${_STAGING_PROJECT}
       - REGION=${_REGION}
+      - SMOKE_TAG=smoke
     args:
       - -c
       - |
-        pip install -q httpx
-        python scripts/smoke_test.py
-    waitFor: [deploy-staging-api]
+        python3 -m pip install -q httpx
+        python3 scripts/smoke_test.py
+    waitFor: [deploy-staging-api, deploy-staging-realtime, deploy-staging-worker]
 
-  # ── Migrate traffic to new revision after smoke passes ────────────────────
+  # ── Promote all three services after smoke passes ─────────────────────────
   - id: migrate-staging-traffic
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
     args:
       - -c
       - |
-        REVISION=$(gcloud run revisions list \
-          --service=praxis-api \
-          --region=${_REGION} \
-          --project=${_STAGING_PROJECT} \
-          --format="value(metadata.name)" \
-          --limit=1 2>/dev/null)
-        if [ -n "$REVISION" ]; then
-          gcloud run services update-traffic praxis-api \
-            --to-revisions="$REVISION=100" \
+        for svc in praxis-api praxis-realtime praxis-worker; do
+          REVISION=$(gcloud run revisions list \
+            --service=$svc \
             --region=${_REGION} \
             --project=${_STAGING_PROJECT} \
-            --quiet
-        fi
+            --format="value(metadata.name)" \
+            --limit=1 2>/dev/null)
+          if [ -n "$REVISION" ]; then
+            echo "Promoting $svc revision $REVISION to 100% traffic..."
+            gcloud run services update-traffic $svc \
+              --to-revisions="$REVISION=100" \
+              --region=${_REGION} \
+              --project=${_STAGING_PROJECT} \
+              --quiet
+          fi
+        done
     waitFor: [staging-smoke-test]
 
   # ── Generate release manifest ──────────────────────────────────────────────

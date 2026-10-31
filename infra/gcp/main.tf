@@ -565,6 +565,12 @@ resource "google_cloud_run_v2_service" "api" {
     }
   }
 
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+    ]
+  }
+
   depends_on = [google_project_service.required_apis]
 }
 
@@ -673,6 +679,12 @@ resource "google_cloud_run_v2_service" "realtime" {
         timeout_seconds   = 5
       }
     }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+    ]
   }
 
   depends_on = [google_project_service.required_apis]
@@ -788,6 +800,12 @@ resource "google_cloud_run_v2_service" "worker" {
         }
       }
     }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+    ]
   }
 
   depends_on = [google_project_service.required_apis]
