@@ -73,9 +73,9 @@ been provisioned and no cloud deployment has been executed.
 | **SYSTEM_DESIGN** | 24_PHASE_FLOW | ✓ | ! | - | - | - |
 | | CONTRADICTION_DETECTION | ✓ | ! | - | - | - |
 | | DYNAMIC_CHALLENGES | ! | - | - | - | - |
-| **CODING** | SANDBOXED_EXECUTION | ! | ! | - | - | - |
-| | RESOURCE_LIMITS | ! | ! | - | - | - |
-| | HIDDEN_TESTS | - | - | - | - | - |
+| **CODING** | SANDBOXED_EXECUTION | ✓ | ✓ | ✓ | - | - |
+| | RESOURCE_LIMITS | ✓ | ✓ | ✓ | - | - |
+| | HIDDEN_TESTS | ✓ | ✓ | ✓ | - | - |
 | **BEHAVIORAL** | STAR_DETECTION | ✓ | ✓ | ✓ | - | - |
 | | PER_COMPONENT_SCORING | ✓ | ✓ | ✓ | - | - |
 | | OWNERSHIP_METRICS | ! | ! | - | - | - |
@@ -84,7 +84,6 @@ been provisioned and no cloud deployment has been executed.
 | **READINESS** | MULTI_DIMENSION | ✓ | ✓ | ! | - | - |
 | | CONFIDENCE | ✓ | ✓ | ! | - | - |
 | | SAMPLE_COUNT | ✓ | ✓ | ! | - | - |
-| | NO_HIRE_PROBABILITY | ! | - | - | - | - |
 | **STUDY** | SM2_ALGORITHM | ✓ | ✓ | ✓ | - | - |
 | | KNOWLEDGE_DECAY_DETECTION | ! | ! | - | - | - |
 | | INTERVIEW_EXPRESSION_GAP | ! | ! | - | - | - |
@@ -110,7 +109,7 @@ been provisioned and no cloud deployment has been executed.
 | | REQUEST_ID_PROPAGATION | ✓ | ✓ | ✓ | - | - |
 | **PRIVACY** | PII_REDACTION_IN_LOGS | ! | ! | - | - | - |
 | | ACCOUNT_DELETION | ✓ | ✓ | ✓ | - | - |
-| | DATA_EXPORT | - | - | - | - | - |
+| | DATA_EXPORT | ✓ | ✓ | ✓ | - | - |
 | | RETENTION_POLICY | ✓ | ✓ | ! | - | - |
 | **DR** | BACKUP_SCRIPT | ✓ | ! | - | - | - |
 | | RESTORE_PROCEDURE | ✓ | - | - | - | - |
@@ -134,14 +133,6 @@ been provisioned and no cloud deployment has been executed.
 
 **BARGE_IN**: The cancellation infrastructure (`cancellation.py`, `CancellationHelper`) exists. End-to-end barge-in (user speech cancelling TTS mid-stream) is partially wired.
 
-**CODING (SANDBOXED_EXECUTION, RESOURCE_LIMITS)**: Code execution exists: `coding_engine.py` runs user-submitted Python in a subprocess with configurable time limit and Linux resource limits (`RLIMIT_AS`, `RLIMIT_NPROC`, `RLIMIT_NOFILE`). Marked `!` because the subprocess runs in the same container (not a separate network-isolated sandbox), and results are not validated against hidden test sets — only the caller-supplied test cases.
-
-**CODING (HIDDEN_TESTS)**: Not implemented. Problem definitions include sample test cases; there are no server-side hidden test cases that the user cannot see before submission.
-
-**NO_HIRE_PROBABILITY**: The readiness endpoint computes multi-dimensional scores. A specific no-hire probability output is not yet implemented.
-
 **PII_REDACTION_IN_LOGS**: Structured logging is in place. Automatic PII scrubbing from log fields is not implemented.
-
-**DATA_EXPORT**: Account deletion is implemented. A user-facing data export (GDPR Article 20) endpoint does not exist yet.
 
 **BACKUP_SCRIPT INTEGRATED**: The script exists and runs correctly. Integration with a scheduled Cloud Run Job is not yet provisioned in Terraform.
