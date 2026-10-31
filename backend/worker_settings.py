@@ -61,7 +61,7 @@ async def on_startup(ctx):
     ctx["db_session_factory"] = create_session_factory(engine)
     
     # Cross-tenant operations need a superuser connection to bypass RLS.
-    admin_url = settings.async_database_url.replace("praxis_app:app_password", "postgres:postgres")
+    admin_url = os.environ.get("DATABASE_ADMIN_URL", settings.async_database_url)
     if admin_url != settings.async_database_url:
         admin_engine = create_engine(settings, url=admin_url)
     else:

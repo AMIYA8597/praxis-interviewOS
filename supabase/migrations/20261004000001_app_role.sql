@@ -1,7 +1,10 @@
+-- Role creation and credentials must be managed out-of-band (e.g. via Terraform or secure secret injection).
+-- Removed hardcoded LOGIN password 'app_password'. Any database where the previous version
+-- of this migration was applied MUST have its praxis_app credential rotated immediately.
 DO $do$ 
 BEGIN 
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'praxis_app') THEN 
-    CREATE ROLE praxis_app WITH NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE LOGIN PASSWORD 'app_password'; 
+    CREATE ROLE praxis_app WITH NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOLOGIN; 
   END IF; 
 END $do$; 
 GRANT authenticated TO praxis_app; 
