@@ -150,6 +150,9 @@ locals {
   worker_image      = "${local.registry_base}/praxis-worker:${var.image_tag}"
   alert_channels    = var.alert_notification_channel != "" ? [var.alert_notification_channel] : []
   domain_configured = var.domain != ""
+  # When no custom domain is configured (e.g. staging without HTTPS LB), allow INGRESS_TRAFFIC_ALL
+  # so direct Cloud Run URLs are reachable. JWT verification remains strictly required.
+  service_ingress = local.domain_configured ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
 }
 
 ################################################################################
@@ -402,9 +405,8 @@ resource "google_artifact_registry_repository" "praxis" {
 resource "google_cloud_run_v2_service" "api" {
   name     = "praxis-api"
   location = var.region
-  # Traffic must go through the load balancer / Cloud Armor.
-  # Direct Cloud Run URL is blocked to prevent bypassing Cloud Armor.
-  ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  # Traffic must go through load balancer when domain is configured; direct access in staging without domain.
+  ingress = local.service_ingress
 
   template {
     service_account = google_service_account.api.email
@@ -573,7 +575,7 @@ resource "google_cloud_run_v2_service" "api" {
 resource "google_cloud_run_v2_service" "realtime" {
   name     = "praxis-realtime"
   location = var.region
-  ingress  = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  ingress  = local.service_ingress
 
   template {
     service_account = google_service_account.realtime.email
