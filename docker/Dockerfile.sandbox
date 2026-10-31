@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.7
+# ── praxis-sandbox production image ──────────────────────────────────────────
+# Sandboxed code execution service with zero application secrets and no egress.
+
+FROM python:3.11.11-slim AS production
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r sandbox && useradd -r -g sandbox -m -d /home/sandbox sandbox
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir fastapi==0.115.5 uvicorn==0.32.1 httpx==0.28.1 pydantic==2.10.3
+
+COPY backend/app/services/sandbox_service.py /app/sandbox_service.py
+
+USER sandbox
+
+EXPOSE 8001
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=5s --retries=3 \
+    CMD curl -fsS http://localhost:8001/health/live || exit 1
+
+CMD ["python", "sandbox_service.py"]

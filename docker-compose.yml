@@ -1,12 +1,10 @@
 # Local development stack.
-# Does NOT replicate the full GCP production topology, but exercises the same
-# service boundaries: Postgres + pgvector, Redis, and the application services.
+# Exercises the service boundaries: Postgres + pgvector, Redis, and application services.
 #
 # Usage:
 #   docker compose up -d postgres redis
-#   # then run backend/realtime locally with `uvicorn`
 #
-# Or bring up the full stack:
+# Bring up the full stack:
 #   docker compose up -d
 
 services:
@@ -46,6 +44,22 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
 
+  sandbox:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.sandbox
+      target: production
+    ports:
+      - "8001:8001"
+    # Zero secrets passed to sandbox
+    environment:
+      PORT: "8001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   api:
     build:
       context: .
@@ -53,6 +67,24 @@ services:
       target: production
     ports:
       - "8000:8000"
+    env_file: .env
+    environment:
+      SANDBOX_SERVICE_URL: "http://sandbox:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sandbox:
+        condition: service_healthy
+
+  realtime:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.realtime
+      target: production
+    ports:
+      - "8080:8080"
     env_file: .env
     depends_on:
       postgres:

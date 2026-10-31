@@ -253,3 +253,5 @@ desktop.ini
 # ESLint / Tool Caches
 # ------------------------------------------------------------
 .eslintcache
+supabase/.temp/
+

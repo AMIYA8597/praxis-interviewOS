@@ -3,11 +3,16 @@ Phase 64 — Coding Interview Engine.
 
 Problem + editor + test execution + runtime limits.
 
-Execution is sandboxed via a subprocess with resource limits.
-Supports Python (primary) and can be extended.
-This is NOT editor-only — it actually executes code against test cases.
+Execution is sandboxed:
+- Zero secrets in environment (minimal env only)
+- Network egress blocked
+- Execution in clean, empty isolated temporary directory
+- Supports remote standalone sandbox service (via SANDBOX_SERVICE_URL)
+- Resource limits (memory, execution timeout, subprocess controls)
+- Supports hidden test cases
 """
 import asyncio
+import functools
 import logging
 import os
 import sys
@@ -16,6 +21,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +29,17 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TIME_LIMIT_MS = 2000
 _DEFAULT_MEMORY_LIMIT_KB = 65536  # 64 MB
+
+_EGRESS_BLOCKER = """
+import socket
+
+def _block_connect(*args, **kwargs):
+    raise PermissionError("Network egress is disabled in this sandbox environment")
+
+socket.socket.connect = _block_connect
+socket.socket.connect_ex = lambda *a, **kw: 111
+socket.create_connection = _block_connect
+"""
 
 
 def _sandbox_preexec(memory_limit_kb: int) -> None:
@@ -43,6 +60,32 @@ def _sandbox_preexec(memory_limit_kb: int) -> None:
     except (ImportError, ValueError, OSError):
         pass  # Windows or privilege issue — timeout is still the last-resort guard
 
+
+def _get_minimal_env(temp_dir: str) -> dict[str, str]:
+    """
+    Produce a strictly sanitized minimal environment.
+    Guarantees no application secrets, database credentials, or API keys are inherited.
+    """
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        "LC_ALL": "C.UTF-8",
+        "LANG": "C.UTF-8",
+        "PYTHONHASHSEED": "0",
+        "PYTHONUNBUFFERED": "1",
+        "HOME": temp_dir,
+        "TMPDIR": temp_dir,
+        "TMP": temp_dir,
+        "TEMP": temp_dir,
+        "USERPROFILE": temp_dir,
+        "PYTHONPATH": temp_dir,
+    }
+    if sys.platform == "win32":
+        for k in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT"):
+            if k in os.environ:
+                env[k] = os.environ[k]
+    return env
+
+
 # Supported languages and their execution configs
 _LANGUAGE_CONFIGS = {
     "python": {
@@ -59,29 +102,61 @@ async def _execute_code_subprocess(
     time_limit_ms: int,
 ) -> dict:
     """
-    Execute code in a subprocess with timeout. Returns {stdout, stderr, runtime_ms, timed_out}.
+    Execute code in a sandboxed subprocess with timeout, minimal environment,
+    empty temp dir, and network egress blocked.
+    If SANDBOX_SERVICE_URL is configured, dispatches to the standalone sandbox service.
     """
+    sandbox_url = os.environ.get("SANDBOX_SERVICE_URL")
+    if sandbox_url:
+        try:
+            async with httpx.AsyncClient(timeout=time_limit_ms / 1000.0 + 3.0) as client:
+                resp = await client.post(
+                    f"{sandbox_url.rstrip('/')}/execute",
+                    json={
+                        "code": code,
+                        "stdin_data": stdin_data,
+                        "language": language,
+                        "time_limit_ms": time_limit_ms,
+                    },
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+        except Exception as e:
+            logger.warning(f"Remote sandbox invocation failed, falling back to local sandbox: {e}")
+
     config = _LANGUAGE_CONFIGS.get(language)
     if config is None:
-        return {"stdout": "", "stderr": f"Language '{language}' not supported.", "runtime_ms": 0, "timed_out": False, "error": True}
+        return {
+            "stdout": "",
+            "stderr": f"Language '{language}' not supported.",
+            "runtime_ms": 0,
+            "timed_out": False,
+            "error": True,
+        }
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=config["extension"], delete=False, encoding="utf-8"
-    ) as f:
-        f.write(code)
-        tmpfile = f.name
+    with tempfile.TemporaryDirectory(prefix="praxis_sandbox_", ignore_cleanup_errors=True) as tmp_dir:
+        # Write network guard to prevent network egress from the candidate script
+        guard_file = os.path.join(tmp_dir, "sitecustomize.py")
+        with open(guard_file, "w", encoding="utf-8") as f:
+            f.write(_EGRESS_BLOCKER)
 
-    try:
-        cmd = config["command"] + [tmpfile]
+        code_file = os.path.join(tmp_dir, f"solution{config['extension']}")
+        with open(code_file, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        minimal_env = _get_minimal_env(tmp_dir)
+        cmd = config["command"] + [code_file]
         start = time.perf_counter()
+        proc = None
         try:
-            import functools
             preexec = functools.partial(_sandbox_preexec, _DEFAULT_MEMORY_LIMIT_KB)
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                cwd=tmp_dir,
+                env=minimal_env,
                 preexec_fn=preexec if sys.platform != "win32" else None,
             )
             stdout_data, stderr_data = await asyncio.wait_for(
@@ -97,19 +172,26 @@ async def _execute_code_subprocess(
                 "error": proc.returncode != 0,
             }
         except asyncio.TimeoutError:
-            try:
-                proc.kill()
-            except Exception:
-                pass
+            if proc is not None:
+                try:
+                    proc.kill()
+                    await asyncio.wait_for(proc.wait(), timeout=1.0)
+                except Exception:
+                    pass
             return {
-                "stdout": "", "stderr": "Time limit exceeded.",
-                "runtime_ms": time_limit_ms, "timed_out": True, "error": False,
+                "stdout": "",
+                "stderr": "Time limit exceeded.",
+                "runtime_ms": time_limit_ms,
+                "timed_out": True,
+                "error": False,
             }
-    finally:
-        try:
-            os.unlink(tmpfile)
-        except OSError:
-            pass
+        finally:
+            if proc is not None and proc.returncode is None:
+                try:
+                    proc.kill()
+                    await asyncio.wait_for(proc.wait(), timeout=1.0)
+                except Exception:
+                    pass
 
 
 async def run_code_against_tests(
@@ -122,7 +204,7 @@ async def run_code_against_tests(
 ) -> dict:
     """
     Execute code against all test cases. Persist results to coding_test_run_results.
-    Returns verdict + per-test results.
+    Returns verdict + per-test results (masking hidden test inputs/outputs).
     """
     # Get current run number
     run_row = await db.execute(text("""
@@ -137,6 +219,7 @@ async def run_code_against_tests(
     for i, tc in enumerate(test_cases):
         stdin = tc.get("input", "")
         expected = tc.get("expected_output", "").strip()
+        is_hidden = bool(tc.get("is_hidden", False))
 
         exec_result = await _execute_code_subprocess(code, stdin, language, time_limit_ms)
 
@@ -160,10 +243,11 @@ async def run_code_against_tests(
         results.append({
             "test_case": i + 1,
             "verdict": tc_verdict,
-            "stdout": exec_result["stdout"][:500],
-            "stderr": exec_result["stderr"][:200],
+            "is_hidden": is_hidden,
+            "stdout": "[Hidden]" if is_hidden else exec_result["stdout"][:500],
+            "stderr": "[Hidden]" if is_hidden and tc_verdict != "tle" else exec_result["stderr"][:200],
             "runtime_ms": exec_result["runtime_ms"],
-            "expected": expected[:200] if expected else None,
+            "expected": "[Hidden]" if is_hidden else (expected[:200] if expected else None),
         })
 
     now = datetime.now(timezone.utc)
