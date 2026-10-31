@@ -13,7 +13,7 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir fastapi==0.115.5 uvicorn==0.32.1 httpx==0.28.1 pydantic==2.10.3
 
-COPY backend/app/services/sandbox_service.py /app/sandbox_service.py
+COPY backend/app/sandbox_service.py /app/sandbox_service.py
 
 USER sandbox
 
