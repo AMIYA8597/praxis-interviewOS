@@ -104,7 +104,7 @@ jobs:
 
     - name: Python Dependency Audit
       run: |
-        pip-audit --skip-editable -f json -o /tmp/pip-audit.json || true
+        pip-audit --skip-editable -f json -o /tmp/pip-audit.json || test -s /tmp/pip-audit.json
         # Parse JSON to detect High/Critical CVEs only.
         # pip-audit exits 1 on any finding, so we use JSON + Python to filter by
         # CVSS severity rather than relying on the text output or exit code.
@@ -175,7 +175,7 @@ jobs:
     - name: Verify No Root Scripts
       run: |
         # conftest.py is a legitimate pytest root fixture; all other .py files are loose scripts
-        scripts=$(ls *.py 2>/dev/null | grep -v '^conftest\.py$' || true)
+        scripts=$(python3 -c "import os; print(' '.join([f for f in os.listdir('.') if f.endswith('.py') and f != 'conftest.py']))")
         if [ -n "$scripts" ]; then
           echo "::error::Loose .py scripts found in repository root: $scripts. Move them to scripts/ or delete them."
           exit 1
@@ -233,7 +233,7 @@ jobs:
       run: pnpm install --frozen-lockfile
 
     - name: Frontend Dependency Audit
-      run: pnpm audit --audit-level=high || true
+      run: pnpm audit --audit-level=high
 
     - name: Run Frontend Tests
       run: pnpm -r --if-present run test
@@ -280,27 +280,71 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build praxis-api (dry-run, no push)
+    - name: Build all three images
       run: |
-        docker build \
-          -f docker/Dockerfile.api \
-          -t praxis-api:ci-test \
-          --target production \
-          --load \
-          .
-      timeout-minutes: 20
+        docker build -f docker/Dockerfile.api -t praxis-api:ci-test --target production --load .
+        docker build -f docker/Dockerfile.realtime -t praxis-realtime:ci-test --target production --load .
+        docker build -f docker/Dockerfile.worker -t praxis-worker:ci-test --target production --load .
+      timeout-minutes: 25
 
-    - name: Verify praxis-api image health
+    - name: Run and healthcheck praxis-api
       run: |
-        # Confirm the entrypoint runs without crashing (--help exits 0 for uvicorn)
-        docker run --rm --entrypoint sh praxis-api:ci-test \
-          -c "uvicorn --version && python -c 'import backend.app.main; print(\"import ok\")'" 2>&1 || true
+        docker run -d --name ci-api -p 8000:8000 \
+          -e DATABASE_URL="postgresql://praxis:dev_password@localhost:5432/praxis" \
+          -e REDIS_URL="redis://localhost:6379/0" \
+          -e APP_ENV=test \
+          praxis-api:ci-test
+        for i in $(seq 1 30); do
+          if curl -fsS http://localhost:8000/health/live; then
+            echo "praxis-api /health/live responded OK"
+            break
+          fi
+          sleep 1
+        done
+        curl -fsS http://localhost:8000/health/live
+        docker stop ci-api && docker rm ci-api
 
-    - name: Check for secrets in image
+    - name: Run and healthcheck praxis-realtime
       run: |
-        # Inspect image ENV and Labels for accidental secret exposure
-        docker inspect praxis-api:ci-test --format='{{json .Config.Env}}' | \
-          python3 -c "
+        docker run -d --name ci-realtime -p 8080:8080 \
+          -e DATABASE_URL="postgresql://praxis:dev_password@localhost:5432/praxis" \
+          -e REDIS_URL="redis://localhost:6379/0" \
+          -e APP_ENV=test \
+          praxis-realtime:ci-test
+        for i in $(seq 1 30); do
+          if curl -fsS http://localhost:8080/health/live; then
+            echo "praxis-realtime /health/live responded OK"
+            break
+          fi
+          sleep 1
+        done
+        curl -fsS http://localhost:8080/health/live
+        docker stop ci-realtime && docker rm ci-realtime
+
+    - name: Run and verify praxis-worker stays up 30s
+      run: |
+        docker run -d --name ci-worker -p 8081:8080 \
+          -e PORT=8080 \
+          -e DATABASE_URL="postgresql://praxis:dev_password@localhost:5432/praxis" \
+          -e REDIS_URL="redis://localhost:6379/0" \
+          -e APP_ENV=test \
+          praxis-worker:ci-test
+        sleep 30
+        is_running=$(docker inspect -f '{{.State.Running}}' ci-worker)
+        if [ "$is_running" != "true" ]; then
+          echo "::error::praxis-worker container died within 30s"
+          docker logs ci-worker
+          exit 1
+        fi
+        echo "praxis-worker stayed up for 30s"
+        curl -fsS http://localhost:8081/health/live || curl -fsS http://localhost:8081/health
+        docker stop ci-worker && docker rm ci-worker
+
+    - name: Check for secrets in images
+      run: |
+        for img in praxis-api:ci-test praxis-realtime:ci-test praxis-worker:ci-test; do
+          docker inspect "$img" --format='{{json .Config.Env}}' | \
+            python3 -c "
         import json, sys, re
         envs = json.load(sys.stdin)
         secret_patterns = [r'(?i)(key|token|secret|password|credential|api_key)\s*=\s*.{10,}']
@@ -311,8 +355,9 @@ jobs:
                     if val not in ('', 'None', 'true', 'false', '0', '1', '/app/.cache/huggingface', '1'):
                         print(f'POTENTIAL SECRET IN IMAGE ENV: {e.split(\"=\")[0]}')
                         sys.exit(1)
-        print('No secrets detected in image ENV')
+        print(f'No secrets detected in {img}')
         "
+        done
 
   secrets-scan:
     runs-on: ubuntu-latest
@@ -337,7 +382,7 @@ jobs:
 
   sbom:
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [backend-tests]
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: write

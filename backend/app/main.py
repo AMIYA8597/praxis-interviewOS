@@ -144,7 +144,8 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     ):
         app.include_router(r, prefix=api_prefix)
 
-    # Metrics is mounted at root (no /api/v1 prefix) — scraped by infra, not clients.
+    # Health and Metrics are mounted at root
+    app.include_router(health_router)
     app.include_router(metrics_router)
 
     if settings.otel_enabled:

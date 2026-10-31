@@ -191,6 +191,7 @@ def create_app() -> FastAPI:
 
         FastAPIInstrumentor.instrument_app(app)
 
+    @app.get("/health")
     @app.get("/health/live")
     async def health_live():
         return {"status": "ok"}

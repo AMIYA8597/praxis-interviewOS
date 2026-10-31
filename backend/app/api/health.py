@@ -7,6 +7,7 @@ from backend.app.dependencies import get_db_session, get_redis, get_ai_gateway
 
 router = APIRouter(tags=["health"])
 
+@router.get("/health", status_code=status.HTTP_200_OK)
 @router.get("/health/live", status_code=status.HTTP_200_OK)
 async def live_check():
     """Liveness probe. Always returns 200 OK if the process is up."""
