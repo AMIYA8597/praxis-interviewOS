@@ -14,7 +14,7 @@ from redis.asyncio import Redis
 
 from backend.app.core.bootstrap import build_gateway, build_providers, configure_logging, configure_tracing
 from backend.app.db.session import create_engine, create_session_factory
-from backend.app.worker_tasks import (
+from backend.app.worker_tasks import (  # noqa: E402
     analyze_job,
     cleanup_old_sessions,
     delete_candidate_account_job,
@@ -22,6 +22,7 @@ from backend.app.worker_tasks import (
     generate_study_material_job,
     process_resume,
     purge_expired_retention_data,
+    run_data_export,
 )
 from backend.app.workers.document_worker import process_document
 from backend.app.workers.embedding_worker import generate_embeddings
@@ -99,6 +100,7 @@ class WorkerSettings:
         purge_expired_retention_data,
         supabase_keepalive_job,
         check_provider_health,
+        run_data_export,
     ]
 
     cron_jobs = [

@@ -18,14 +18,16 @@ CREATE TABLE IF NOT EXISTS preparation_plans (
   UNIQUE NULLS NOT DISTINCT (candidate_id, job_id)
 );
 
+ALTER TABLE preparation_plans ADD COLUMN IF NOT EXISTS plan_json jsonb;
+
 ALTER TABLE preparation_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE preparation_plans FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY "own_preparation_plans"
-  ON preparation_plans FOR ALL
-  USING (candidate_id IN (
-    SELECT id FROM candidates WHERE profile_id = auth.uid()
-  ));
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='preparation_plans' AND policyname='own_preparation_plans') THEN
+    EXECUTE 'CREATE POLICY "own_preparation_plans" ON preparation_plans FOR ALL USING (candidate_id IN (SELECT id FROM candidates WHERE profile_id = auth.uid()))';
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_preparation_plans_candidate
   ON preparation_plans(candidate_id);

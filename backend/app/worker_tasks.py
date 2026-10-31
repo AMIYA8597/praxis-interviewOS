@@ -639,3 +639,115 @@ async def purge_expired_retention_data(ctx: Dict[str, Any]):
         "retention_purge_completed",
         extra={"segments": seg.rowcount, "documents": len(docs), "blob_failures": failed, "at": datetime.now(timezone.utc).isoformat()},
     )
+
+
+# ════════════════════════════════════════════════════════════════════
+# Candidate data export (GDPR/CCPA)
+# ════════════════════════════════════════════════════════════════════
+
+@job(candidate_arg=1)
+async def run_data_export(ctx: Dict[str, Any], export_id: str, candidate_id: str):
+    """
+    Assemble a full JSON archive of a candidate's personal data and upload it to
+    GCS. Updates candidate_data_exports with status/URL when done.
+
+    The output JSON contains: profile, sessions (metadata only), scores,
+    projects, experiences, skills, stories, resumes (metadata only), jobs, and
+    readiness snapshots. Raw document blobs are NOT included (only metadata).
+    """
+    import json as _json
+
+    db = ctx["db_engine"]
+    admin_db = ctx.get("admin_db_engine", db)
+
+    async with admin_db.begin() as conn:
+        await conn.execute(
+            text("UPDATE candidate_data_exports SET status = 'processing' WHERE id = :eid"),
+            {"eid": export_id},
+        )
+
+    try:
+        payload: dict = {"export_id": export_id, "candidate_id": candidate_id, "exported_at": datetime.now(timezone.utc).isoformat()}
+
+        async with user_db_conn(db, candidate_id) as conn:
+            def _rows(rs):
+                return [dict(r._mapping) for r in rs.fetchall()]
+
+            payload["profile"] = _rows(await conn.execute(
+                text("SELECT full_name, headline, years_experience, created_at FROM candidates WHERE id = CAST(:cid AS uuid)"),
+                {"cid": candidate_id},
+            ))
+            payload["sessions"] = _rows(await conn.execute(
+                text("""
+                    SELECT id, session_type, status, started_at, ended_at, overall_score, difficulty_level
+                    FROM practice_sessions WHERE candidate_id = CAST(:cid AS uuid)
+                    ORDER BY created_at DESC LIMIT 500
+                """),
+                {"cid": candidate_id},
+            ))
+            payload["projects"] = _rows(await conn.execute(
+                text("SELECT id, name, summary, problem, tech_stack, metrics, verified_by_user, created_at FROM candidate_projects WHERE candidate_id = CAST(:cid AS uuid) ORDER BY created_at DESC"),
+                {"cid": candidate_id},
+            ))
+            payload["experiences"] = _rows(await conn.execute(
+                text("SELECT id, company, title, start_date, end_date, achievements FROM candidate_experiences WHERE candidate_id = CAST(:cid AS uuid) ORDER BY start_date DESC"),
+                {"cid": candidate_id},
+            ))
+            payload["skills"] = _rows(await conn.execute(
+                text("""
+                    SELECT s.name, cs.proficiency, cs.years_used, cs.evidence_source
+                    FROM candidate_skills cs JOIN skills s ON s.id = cs.skill_id
+                    WHERE cs.candidate_id = CAST(:cid AS uuid)
+                """),
+                {"cid": candidate_id},
+            ))
+            payload["stories"] = _rows(await conn.execute(
+                text("SELECT id, situation, task, action, result, competency_tags FROM stories WHERE candidate_id = CAST(:cid AS uuid)"),
+                {"cid": candidate_id},
+            ))
+            payload["readiness"] = _rows(await conn.execute(
+                text("SELECT domain_code, score, session_count, last_updated_at FROM candidate_readiness WHERE candidate_id = CAST(:cid AS uuid)"),
+                {"cid": candidate_id},
+            ))
+            payload["jobs"] = _rows(await conn.execute(
+                text("SELECT id, role_title, company_name, processing_status, created_at FROM jobs WHERE candidate_id = CAST(:cid AS uuid) ORDER BY created_at DESC LIMIT 100"),
+                {"cid": candidate_id},
+            ))
+
+        # Serialize — convert datetime/UUID objects to strings
+        json_bytes = _json.dumps(payload, default=str, indent=2).encode("utf-8")
+
+        from backend.app.core.storage import get_storage_client
+        storage = ctx.get("storage") or get_storage_client()
+        object_key = f"exports/{candidate_id}/{export_id}.json"
+
+        from datetime import timedelta
+
+        # Upload and generate signed URL (24 h expiry)
+        await storage.put(object_key, json_bytes, content_type="application/json")
+        signed_url: str = await storage.sign_url(object_key, expiry_seconds=86400)
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=86400)
+
+        async with admin_db.begin() as conn:
+            await conn.execute(
+                text("""
+                    UPDATE candidate_data_exports
+                    SET status = 'ready',
+                        completed_at = now(),
+                        expires_at = :exp,
+                        download_url = :url,
+                        object_key = :key
+                    WHERE id = :eid
+                """),
+                {"eid": export_id, "exp": expires_at, "url": signed_url, "key": object_key},
+            )
+
+    except Exception as exc:
+        async with admin_db.begin() as conn:
+            await conn.execute(
+                text("UPDATE candidate_data_exports SET status = 'failed', error_message = :err WHERE id = :eid"),
+                {"eid": export_id, "err": f"{type(exc).__name__}: {exc}"[:500]},
+            )
+        raise
+
+    return {"status": "ready", "export_id": export_id}

@@ -334,3 +334,39 @@ jobs:
           exit 1
         fi
         echo "No real .env files committed."
+
+  sbom:
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Syft (SBOM generator)
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+    - name: Generate SBOM for backend
+      run: |
+        syft dir:backend \
+          --output cyclonedx-json=sbom-backend.json \
+          --output spdx-json=sbom-backend.spdx.json
+
+    - name: Generate SBOM for realtime-agent
+      run: |
+        syft dir:realtime-agent \
+          --output cyclonedx-json=sbom-realtime.json \
+          --output spdx-json=sbom-realtime.spdx.json
+
+    - name: Upload SBOMs as CI artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-${{ github.sha }}
+        path: |
+          sbom-backend.json
+          sbom-backend.spdx.json
+          sbom-realtime.json
+          sbom-realtime.spdx.json
+        retention-days: 90
