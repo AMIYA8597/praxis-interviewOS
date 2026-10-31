@@ -87,8 +87,52 @@ Max session duration: 90 minutes. Sends `{"type":"max_duration_reached"}` then c
 ### Client → Server (binary)
 
 Raw PCM audio frames: 16 kHz, 16-bit little-endian, mono.
-Frame size: 20 ms (320 samples per frame).
-Silero VAD processes each frame; STT is triggered on speech-end detection.
+
+#### Binary Frame Structure (18-byte Header + Payload)
+
+Every binary audio frame from the client MUST prepend an 18-byte big-endian header matching the `struct.unpack(">BBIdI")` format:
+
+```
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   proto_ver   |   frame_type  |          client_seq           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                          client_seq                           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                           capture_ts                          |
+|                           (64-bit float)                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                          payload_len                          |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                     PCM16 Audio Payload...                    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
+
+| Field | Type | Description | Strict Validation Rules |
+|-------|------|-------------|-------------------------|
+| `proto_ver` | uint8 | Protocol version | Must be exactly `1`. Any other version triggers `unsupported_protocol`. |
+| `frame_type` | uint8 | Frame type | Must be exactly `1` (audio frame). Any other value triggers `invalid_frame_type`. |
+| `client_seq` | uint32 | Client sequence number | Monotonically strictly increasing (`client_seq > last_client_seq`). Duplicate or out-of-order sequence triggers `out_of_order_sequence`. |
+| `capture_ts` | float64 | Epoch timestamp (seconds) | Client audio capture timestamp. |
+| `payload_len` | uint32 | Byte length of payload | Must match `len(pcm)` and not exceed 1MB (`oversized_frame`). |
+| `payload` | bytes | PCM16 audio bytes | Must be an even number of bytes (`len(pcm) % 2 == 0`) since 16-bit samples are 2 bytes each (`malformed_audio_frame`). |
+
+#### Server ACK Envelope (`audio.frame_ack`)
+
+Upon successful frame reception and validation, the server dispatches a JSON ACK event:
+
+```json
+{
+  "type": "audio.frame_ack",
+  "session_id": "<uuid>",
+  "sequence": 0,
+  "payload": {
+    "client_seq": 42,
+    "received_at": 1700000000.123
+  }
+}
+```
 
 ### Server → Client (binary)
 

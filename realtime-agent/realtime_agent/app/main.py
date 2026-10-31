@@ -641,6 +641,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
         tracer = trace.get_tracer(__name__)
 
         # ── 6. Receive loop ─────────────────────────────────────────────
+        last_client_seq: Optional[int] = None
         while True:
             message = await websocket.receive()
             mtype = message.get("type")
@@ -650,7 +651,7 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
             if message.get("bytes") is not None:
                 raw_bytes = message["bytes"]
                 if len(raw_bytes) < 18:
-                    send_error("malformed_audio_frame", "Binary frame is too small for header")
+                    send_error("malformed_audio_frame", "Binary frame is too small for header (minimum 18 bytes)")
                     continue
                 import struct
                 try:
@@ -661,12 +662,22 @@ async def _run_session(websocket: WebSocket, session_id: str, token: Optional[st
                 if proto_ver != 1:
                     send_error("unsupported_protocol", f"Unsupported protocol version: {proto_ver}")
                     continue
+                if frame_type != 1:
+                    send_error("invalid_frame_type", f"Invalid frame_type: {frame_type}. Audio frames must have frame_type 1.")
+                    continue
+                if last_client_seq is not None and client_seq <= last_client_seq:
+                    send_error("out_of_order_sequence", f"Duplicate or out-of-order client_seq: received {client_seq}, expected > {last_client_seq}")
+                    continue
+                last_client_seq = client_seq
                 if payload_len > 1024 * 1024:
                     send_error("oversized_frame", "Audio frame payload exceeds maximum size")
                     continue
                 pcm = raw_bytes[18:]
                 if len(pcm) != payload_len:
-                    send_error("malformed_audio_frame", "Payload length mismatch")
+                    send_error("malformed_audio_frame", f"Payload length mismatch: expected {payload_len}, received {len(pcm)}")
+                    continue
+                if len(pcm) % 2 != 0:
+                    send_error("malformed_audio_frame", f"PCM16 payload must be an even number of bytes, got {len(pcm)}")
                     continue
                     
                 enqueue_event(Envelope(type="audio.frame_ack", session_id=session_id, sequence=0,

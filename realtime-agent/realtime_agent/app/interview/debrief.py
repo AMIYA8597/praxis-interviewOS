@@ -174,7 +174,7 @@ async def generate_debrief_from_aggregated(
     session_id: str, aggregated: Dict[str, Any], gateway_router, routing_ctx
 ) -> SessionDebrief:
     """Pure generation step — takes already-aggregated data, builds prompt, calls LLM."""
-    with open(str(PROJECT_ROOT / str(PROJECT_ROOT / "prompts/debrief/summary_v1.md")), "r") as f:
+    with open(str(PROJECT_ROOT / "prompts/debrief/summary_v1.md"), "r") as f:
         sys_prompt = f.read()
 
     builder = PromptBuilder()

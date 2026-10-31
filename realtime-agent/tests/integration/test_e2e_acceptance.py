@@ -62,20 +62,21 @@ async def e2e_db(monkeypatch):
     async with engine.begin() as conn:
         for stmt in [
             "CREATE TABLE candidates (id TEXT, profile_id TEXT, full_name TEXT)",
-            "CREATE TABLE jobs (id TEXT)",
+            "CREATE TABLE jobs (id TEXT, role_title TEXT, company_name TEXT)",
             "CREATE TABLE job_blueprints (job_id TEXT, summary TEXT, likely_topics TEXT DEFAULT '[]', prep_pack TEXT DEFAULT '[]')",
             "CREATE TABLE practice_sessions (id TEXT, candidate_id TEXT, job_id TEXT, status TEXT, started_at TEXT, ended_at TEXT, difficulty TEXT DEFAULT 'standard', interview_type TEXT DEFAULT 'technical')",
             "CREATE TABLE session_debriefs (id TEXT, session_id TEXT UNIQUE, headline_metrics TEXT, strengths TEXT, weaknesses TEXT, flagged_claims TEXT, jd_coverage TEXT, generated_at TEXT, created_at TEXT, updated_at TEXT)",
-            "CREATE TABLE transcript_segments (session_id TEXT, role TEXT, text TEXT, start_ms REAL, end_ms REAL, confidence REAL, source TEXT)",
+            "CREATE TABLE transcript_segments (id TEXT, session_id TEXT, turn_id TEXT, role TEXT, text TEXT, is_interim BOOLEAN, start_ms REAL, end_ms REAL, confidence REAL, language TEXT, source TEXT)",
             "CREATE TABLE session_state_log (id TEXT PRIMARY KEY, session_id TEXT, from_state TEXT, to_state TEXT, reason TEXT, created_at TEXT)",
             "CREATE TABLE session_turns (id TEXT, session_id TEXT, turn_index INT, speaker TEXT, parent_turn_id TEXT, text TEXT, started_at TEXT, ended_at TEXT)",
-            "CREATE TABLE turn_scores (id TEXT, turn_id TEXT, overall REAL, rationale TEXT, relevance REAL, correctness REAL, structure REAL, grounding REAL, specificity REAL, conciseness REAL)",
+            "CREATE TABLE turn_scores (id TEXT, turn_id TEXT, rubric_version TEXT, overall REAL, rationale TEXT, relevance REAL, correctness REAL, structure REAL, grounding REAL, specificity REAL, conciseness REAL)",
             "CREATE TABLE session_claims (id TEXT, session_id TEXT, turn_id TEXT, claim_text TEXT, supported BOOLEAN, contradiction_of_claim_id TEXT)",
         ]:
             await conn.execute(text(stmt))
 
     async with engine.connect() as conn:
         await conn.execute(text(f"INSERT INTO candidates VALUES ('{_CANDIDATE_ID}', '{_USER_ID}', 'Test Candidate')"))
+        await conn.execute(text(f"INSERT INTO jobs VALUES ('{_JOB_ID}', 'Senior Backend Engineer', 'Acme Corp')"))
         await conn.execute(text(f"INSERT INTO practice_sessions (id, candidate_id, job_id) VALUES ('{_SESSION_ID}', '{_CANDIDATE_ID}', '{_JOB_ID}')"))
         await conn.execute(text(f"INSERT INTO job_blueprints VALUES ('{_JOB_ID}', '{{\"requirements\": [\"Python\", \"React\"]}}', '[]', '[]')"))
         await conn.commit()
@@ -99,11 +100,14 @@ def _mock_gateway(monkeypatch):
         from realtime_agent.app.interview.policy import PolicyDecision
         from realtime_agent.app.scoring.models import AnswerScore
 
-        if schema is AnswerScore or (schema and getattr(schema, "__name__", "") == "AnswerScore"):
-            return MagicMock(result=AnswerScore(
+        if schema is AnswerScore or (schema and getattr(schema, "__name__", "") in ("AnswerScore", "LlmScoringResult")):
+            return MagicMock(result=MagicMock(
                 relevance=0.8, correctness=0.9, structure=0.7, grounding=0.8,
-                specificity=0.7, conciseness=0.6, overall=0.8, rationale="Good answer"
+                specificity=0.7, conciseness=0.6, star_completeness=None, overall=0.8, rationale="Good answer"
             ))
+        if schema and getattr(schema, "__name__", "") == "ClaimExtractionResult":
+            from realtime_agent.app.scoring.models import ClaimExtractionResult
+            return MagicMock(result=ClaimExtractionResult(claims=[]))
         if schema is SessionDebrief or (schema and getattr(schema, "__name__", "") == "SessionDebrief"):
             return MagicMock(result=SessionDebrief(
                 headline_metrics=HeadlineMetrics(average_wpm=100.0, average_filler_rate=0.05, average_score=0.8),
@@ -179,7 +183,7 @@ async def test_full_session_lifecycle(e2e_db, patch_auth, monkeypatch):
     with TestClient(app) as client:
         with client.websocket_connect(f"/ws/sessions/{_SESSION_ID}?token={token}") as ws:
             # --- Phase 1: receive initial session flow until first question ---
-            for _ in range(10):
+            for _ in range(25):
                 raw = _recv_text(ws)
                 data = json.loads(raw)
                 events_received.append(data["type"])
@@ -194,12 +198,17 @@ async def test_full_session_lifecycle(e2e_db, patch_auth, monkeypatch):
             assert interviewer_questions[0], "Interviewer question must be non-empty"
 
             # --- Phase 2: send audio frames → trigger VAD speech_end ---
-            for _ in range(6):
-                ws.send_bytes(b"\x00" * 1024)
+            import struct
+            for seq_num in range(6):
+                pcm_data = b"\x00" * 1024
+                hdr = struct.pack(">BBIdI", 1, 1, seq_num, time.time(), len(pcm_data))
+                ws.send_bytes(hdr + pcm_data)
 
             # Wait for silence detection to kick in
             time.sleep(2)
-            ws.send_bytes(b"\x00" * 512)  # trigger loop iteration
+            pcm_data = b"\x00" * 512
+            hdr = struct.pack(">BBIdI", 1, 1, 6, time.time(), len(pcm_data))
+            ws.send_bytes(hdr + pcm_data)  # trigger loop iteration
 
             # Wait for scoring + next question
             for _ in range(15):
@@ -215,7 +224,7 @@ async def test_full_session_lifecycle(e2e_db, patch_auth, monkeypatch):
             # --- Phase 3: end session, receive debrief ---
             ws.send_text(json.dumps({"type": "session.end"}))
 
-            for _ in range(10):
+            for _ in range(25):
                 raw = _recv_text(ws)
                 data = json.loads(raw)
                 events_received.append(data["type"])
