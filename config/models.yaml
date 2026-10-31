@@ -2,11 +2,9 @@
 # instances (see praxis_ai_gateway/providers/*.py): ollama, groq, openai,
 # anthropic, gemini, deepseek, xai. Candidates are tried in order; the
 # gateway falls back to the next one on failure / open circuit breaker.
+# Cloud providers are placed first because no Ollama runs in container/cloud environments.
 aliases:
   fast_classify:
-    - provider: "ollama"
-      model: "llama3.1:8b-instruct-q4_K_M"
-      max_latency_ms: 500
     - provider: "groq"
       model: "llama-3.1-8b-instant"
       max_latency_ms: 1000
@@ -15,13 +13,13 @@ aliases:
       max_latency_ms: 2000
       cost_per_1k_input: 0.00015
       cost_per_1k_output: 0.00060
-
-  # General structured extraction / drafting (resume + JD parsing, outreach,
-  # study material). Free/local first.
-  reasoning:
     - provider: "ollama"
       model: "llama3.1:8b-instruct-q4_K_M"
-      max_latency_ms: 30000
+      max_latency_ms: 500
+
+  # General structured extraction / drafting (resume + JD parsing, outreach,
+  # study material). Cloud-first in server environments.
+  reasoning:
     - provider: "groq"
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
@@ -30,6 +28,9 @@ aliases:
       max_latency_ms: 10000
       cost_per_1k_input: 0.00015
       cost_per_1k_output: 0.00060
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 30000
 
   deep_reasoning:
     - provider: "openai"
@@ -38,7 +39,7 @@ aliases:
       cost_per_1k_input: 0.00500
       cost_per_1k_output: 0.01500
     - provider: "anthropic"
-      model: "claude-3-5-sonnet-20240620"
+      model: "claude-3-5-sonnet-20241022"
       max_latency_ms: 10000
       cost_per_1k_input: 0.00300
       cost_per_1k_output: 0.01500

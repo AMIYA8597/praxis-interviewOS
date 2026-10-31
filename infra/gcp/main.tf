@@ -479,6 +479,26 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
+        name = "GROQ_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "praxis-groq-api-key"
+            version = var.secret_version
+          }
+        }
+      }
+
+      env {
+        name = "OPENAI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "praxis-openai-api-key"
+            version = var.secret_version
+          }
+        }
+      }
+
+      env {
         name = "SUPABASE_ANON_KEY"
         value_source {
           secret_key_ref {
@@ -493,6 +513,26 @@ resource "google_cloud_run_v2_service" "api" {
         value_source {
           secret_key_ref {
             secret  = "praxis-fernet-key"
+            version = var.secret_version
+          }
+        }
+      }
+
+      env {
+        name = "GROQ_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "praxis-groq-api-key"
+            version = var.secret_version
+          }
+        }
+      }
+
+      env {
+        name = "OPENAI_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "praxis-openai-api-key"
             version = var.secret_version
           }
         }
