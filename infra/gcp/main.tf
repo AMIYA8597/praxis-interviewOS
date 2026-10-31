@@ -51,9 +51,9 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "GCP region — choose based on user latency and Supabase location"
+  description = "GCP region — asia-south1 per owner decision"
   type        = string
-  default     = "us-central1"
+  default     = "asia-south1"
 }
 
 variable "environment" {
@@ -80,9 +80,21 @@ variable "image_tag" {
 }
 
 variable "secret_version" {
-  description = "Secret Manager version to pin. 'latest' is allowed during initial bootstrap only — pin to a specific version number after first deploy."
+  description = "Secret Manager version to pin. Pinned to exact version (e.g. '1'), never 'latest' in production."
   type        = string
-  default     = "latest"
+  default     = "1"
+}
+
+variable "db_pool_size" {
+  description = "SQLAlchemy async connection pool size per instance per DATABASE_CONNECTION_BUDGET.md"
+  type        = number
+  default     = 2
+}
+
+variable "db_max_overflow" {
+  description = "SQLAlchemy async connection pool max overflow per instance per DATABASE_CONNECTION_BUDGET.md"
+  type        = number
+  default     = 3
 }
 
 variable "github_repository" {
@@ -417,8 +429,11 @@ resource "google_cloud_run_v2_service" "api" {
     }
 
     vpc_access {
-      connector = google_vpc_access_connector.praxis.id
-      egress    = "PRIVATE_RANGES_ONLY"
+      network_interfaces {
+        network    = google_compute_network.praxis.name
+        subnetwork = google_compute_subnetwork.praxis.name
+      }
+      egress = "PRIVATE_RANGES_ONLY"
     }
 
     timeout = "60s"
@@ -443,6 +458,26 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "APP_ENV"
         value = var.environment
+      }
+
+      env {
+        name  = "DB_POOL_SIZE"
+        value = tostring(var.db_pool_size)
+      }
+
+      env {
+        name  = "DB_MAX_OVERFLOW"
+        value = tostring(var.db_max_overflow)
+      }
+
+      env {
+        name  = "DB_POOL_RECYCLE_S"
+        value = "300"
+      }
+
+      env {
+        name  = "DB_POOL_PRE_PING"
+        value = "true"
       }
 
       env {
@@ -594,8 +629,11 @@ resource "google_cloud_run_v2_service" "realtime" {
     }
 
     vpc_access {
-      connector = google_vpc_access_connector.praxis.id
-      egress    = "PRIVATE_RANGES_ONLY"
+      network_interfaces {
+        network    = google_compute_network.praxis.name
+        subnetwork = google_compute_subnetwork.praxis.name
+      }
+      egress = "PRIVATE_RANGES_ONLY"
     }
 
     # Max Cloud Run timeout is 3600s. WebSocket clients must handle reconnect.
@@ -621,6 +659,26 @@ resource "google_cloud_run_v2_service" "realtime" {
       env {
         name  = "APP_ENV"
         value = var.environment
+      }
+
+      env {
+        name  = "DB_POOL_SIZE"
+        value = tostring(var.db_pool_size)
+      }
+
+      env {
+        name  = "DB_MAX_OVERFLOW"
+        value = tostring(var.db_max_overflow)
+      }
+
+      env {
+        name  = "DB_POOL_RECYCLE_S"
+        value = "300"
+      }
+
+      env {
+        name  = "DB_POOL_PRE_PING"
+        value = "true"
       }
 
       env {
@@ -718,8 +776,11 @@ resource "google_cloud_run_v2_service" "worker" {
     }
 
     vpc_access {
-      connector = google_vpc_access_connector.praxis.id
-      egress    = "PRIVATE_RANGES_ONLY"
+      network_interfaces {
+        network    = google_compute_network.praxis.name
+        subnetwork = google_compute_subnetwork.praxis.name
+      }
+      egress = "PRIVATE_RANGES_ONLY"
     }
 
     timeout = "3600s" # allow long-running jobs (debrief, embedding batches)
@@ -738,6 +799,26 @@ resource "google_cloud_run_v2_service" "worker" {
       env {
         name  = "APP_ENV"
         value = var.environment
+      }
+
+      env {
+        name  = "DB_POOL_SIZE"
+        value = tostring(var.db_pool_size)
+      }
+
+      env {
+        name  = "DB_MAX_OVERFLOW"
+        value = tostring(var.db_max_overflow)
+      }
+
+      env {
+        name  = "DB_POOL_RECYCLE_S"
+        value = "300"
+      }
+
+      env {
+        name  = "DB_POOL_PRE_PING"
+        value = "true"
       }
 
       env {

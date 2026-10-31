@@ -7,7 +7,7 @@
 # Sequence: staging certification → review → production provisioning → production deploy.
 
 project_id                = "praxis-production" # REPLACE with real project ID
-region                    = "us-central1"
+region                    = "asia-south1"
 environment               = "production"
 artifact_registry_project = "praxis-production"
 github_repository         = "AMIYA8597/praxis-interviewOS"
@@ -18,7 +18,7 @@ github_repository         = "AMIYA8597/praxis-interviewOS"
 image_tag = "REPLACE_WITH_IMMUTABLE_TAG"
 
 # Pin to exact secret version in production. Never leave as "latest" after first deploy.
-secret_version = "REPLACE_WITH_SECRET_VERSION"
+secret_version = "1"
 
 api_min_instances      = 1 # always warm
 api_max_instances      = 10

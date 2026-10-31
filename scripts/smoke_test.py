@@ -31,7 +31,7 @@ def get_staging_url() -> str:
         return url.rstrip("/")
 
     project = os.environ.get("STAGING_PROJECT", "").strip()
-    region = os.environ.get("REGION", "us-central1").strip()
+    region = os.environ.get("REGION", "asia-south1").strip()
     smoke_tag = os.environ.get("SMOKE_TAG", "").strip()
     if not project:
         sys.exit("ERROR: set STAGING_API_URL or (STAGING_PROJECT + REGION) environment variables")

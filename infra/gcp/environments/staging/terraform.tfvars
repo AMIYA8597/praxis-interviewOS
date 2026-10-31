@@ -13,7 +13,7 @@
 # WARNING: staging and production must use DIFFERENT GCP projects.
 
 project_id                = "praxis-staging" # REPLACE: see above
-region                    = "us-central1"
+region                    = "asia-south1"
 environment               = "staging"
 artifact_registry_project = "praxis-staging" # same as project_id for staging
 github_repository         = "AMIYA8597/praxis-interviewOS"
@@ -22,9 +22,8 @@ github_repository         = "AMIYA8597/praxis-interviewOS"
 # NEVER apply manually with this placeholder — it will fail Terraform validation.
 image_tag = "REPLACE_WITH_SHA"
 
-# secret_version: set to "latest" initially, pin to specific version after first deploy.
-# Example: secret_version = "3"
-secret_version = "latest"
+# secret_version: pinned to specific version number (never "latest").
+secret_version = "1"
 
 api_min_instances      = 0 # scale-to-zero in staging to save cost
 api_max_instances      = 3

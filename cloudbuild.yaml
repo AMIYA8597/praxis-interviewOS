@@ -11,7 +11,7 @@
 #   _GITHUB_REPO       — owner/repo (e.g. AMIYA8597/praxis-interviewOS)
 
 substitutions:
-  _REGION: us-central1
+  _REGION: asia-south1
   _REGISTRY: ${_REGION}-docker.pkg.dev/${_REGISTRY_PROJECT}/praxis
   _IMAGE_TAG: ${SHORT_SHA}
 
