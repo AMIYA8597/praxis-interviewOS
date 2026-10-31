@@ -66,12 +66,26 @@ async def aggregate_session_data(session_id: str, db: AsyncSession) -> Dict[str,
     claims_res = await db.execute(query_claims, {"sid": session_id})
     claims = [dict(c._mapping) for c in claims_res.fetchall()]
     
-    # Calculate simple averages safely
-    avg_wpm = sum(m.get("wpm") or 0 for m in metrics) / max(len(metrics), 1) if metrics else 120.0
-    avg_filler = sum(m.get("filler_rate") or 0 for m in metrics) / max(len(metrics), 1) if metrics else 0.0
-    avg_score = sum(s.get("overall", 0) for s in scores) / max(len(scores), 1) if scores else 0.0
-    
-    # We lack job details in standard tables, but for now we skip missed topics
+    # Calculate truthful averages safely (excluding missing/failed measurements)
+    valid_wpms = [m.get("wpm") for m in metrics if m.get("wpm") is not None]
+    avg_wpm = round(sum(valid_wpms) / len(valid_wpms), 2) if valid_wpms else None
+
+    valid_fillers = [m.get("filler_rate") for m in metrics if m.get("filler_rate") is not None]
+    avg_filler = round(sum(valid_fillers) / len(valid_fillers), 4) if valid_fillers else None
+
+    valid_scores = [
+        s.get("overall") for s in scores
+        if s.get("overall") is not None and s.get("measurement_status") in (None, "MEASURED", "ESTIMATED")
+    ]
+    avg_score = round(sum(valid_scores) / len(valid_scores), 3) if valid_scores else None
+
+    if valid_wpms and valid_scores:
+        measurement_status = "MEASURED"
+    elif valid_wpms or valid_scores:
+        measurement_status = "DEGRADED"
+    else:
+        measurement_status = "UNAVAILABLE"
+
     covered_topics = [] 
     likely_topics = set()
     missed_topics = []
@@ -81,10 +95,17 @@ async def aggregate_session_data(session_id: str, db: AsyncSession) -> Dict[str,
         "averages": {
             "wpm": avg_wpm,
             "filler_rate": avg_filler,
-            "overall_score": avg_score
+            "overall_score": avg_score,
+            "measurement_status": measurement_status,
         },
-        "weakest_scores": [s for s in scores if s.get("overall", 1.0) < 0.6],
-        "strongest_scores": [s for s in scores if s.get("overall", 0.0) >= 0.8],
+        "weakest_scores": [
+            s for s in scores 
+            if s.get("overall") is not None and s.get("measurement_status") in (None, "MEASURED", "ESTIMATED") and s.get("overall") < 0.6
+        ],
+        "strongest_scores": [
+            s for s in scores 
+            if s.get("overall") is not None and s.get("measurement_status") in (None, "MEASURED", "ESTIMATED") and s.get("overall") >= 0.8
+        ],
         "flagged_claims": [c.get("claim_text") for c in claims if not c.get("supported") or c.get("contradiction_of_claim_id")],
         "coverage": {
             "covered": list(covered_topics),
@@ -105,9 +126,24 @@ def aggregate_from_raw_data(raw: Dict[str, Any]) -> Dict[str, Any]:
     claims = raw.get("claims", [])
     jd_blueprint = raw.get("jd_blueprint", {})
 
-    avg_wpm = sum(m.get("wpm") or 0 for m in metrics) / max(len(metrics), 1) if metrics else 120.0
-    avg_filler = sum(m.get("filler_rate") or 0 for m in metrics) / max(len(metrics), 1) if metrics else 0.0
-    avg_score = sum(s.get("overall", 0) for s in scores) / max(len(scores), 1) if scores else 0.0
+    valid_wpms = [m.get("wpm") for m in metrics if m.get("wpm") is not None]
+    avg_wpm = round(sum(valid_wpms) / len(valid_wpms), 2) if valid_wpms else None
+
+    valid_fillers = [m.get("filler_rate") for m in metrics if m.get("filler_rate") is not None]
+    avg_filler = round(sum(valid_fillers) / len(valid_fillers), 4) if valid_fillers else None
+
+    valid_scores = [
+        s.get("overall") for s in scores
+        if s.get("overall") is not None and s.get("measurement_status") in (None, "MEASURED", "ESTIMATED")
+    ]
+    avg_score = round(sum(valid_scores) / len(valid_scores), 3) if valid_scores else None
+
+    if valid_wpms and valid_scores:
+        measurement_status = "MEASURED"
+    elif valid_wpms or valid_scores:
+        measurement_status = "DEGRADED"
+    else:
+        measurement_status = "UNAVAILABLE"
 
     covered = list({t.get("topic") for t in turns if t.get("topic")})
     likely = set(jd_blueprint.get("likely_topics", []))
@@ -115,9 +151,20 @@ def aggregate_from_raw_data(raw: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "turn_count": len(turns),
-        "averages": {"wpm": avg_wpm, "filler_rate": avg_filler, "overall_score": avg_score},
-        "weakest_scores": [s.get("turn_id") for s in scores if s.get("overall", 1.0) < 0.6],
-        "strongest_scores": [s.get("turn_id") for s in scores if s.get("overall", 0.0) >= 0.8],
+        "averages": {
+            "wpm": avg_wpm,
+            "filler_rate": avg_filler,
+            "overall_score": avg_score,
+            "measurement_status": measurement_status,
+        },
+        "weakest_scores": [
+            s.get("turn_id") for s in scores 
+            if s.get("overall") is not None and s.get("measurement_status") in (None, "MEASURED", "ESTIMATED") and s.get("overall") < 0.6
+        ],
+        "strongest_scores": [
+            s.get("turn_id") for s in scores 
+            if s.get("overall") is not None and s.get("measurement_status") in (None, "MEASURED", "ESTIMATED") and s.get("overall") >= 0.8
+        ],
         "flagged_claims": [c.get("claim_text") for c in claims if not c.get("supported")],
         "coverage": {"covered": covered, "missed": missed},
     }

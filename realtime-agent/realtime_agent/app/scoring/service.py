@@ -125,9 +125,18 @@ async def score_answer_async(
         llm_score = call_result.result
     except Exception as e:
         logger.error(f"LLM Scoring failed: {e}")
-        llm_score = LlmScoringResult(  # fallback: LLM unavailable
-            relevance=0.5, correctness=0.5, structure=0.5, specificity=0.5, conciseness=0.5,  # fallback
-            rationale="Scoring failed fallback."
+        return AnswerScore(
+            relevance=None,
+            correctness=None,
+            structure=None,
+            grounding=grounding if grounding > 0 else None,
+            specificity=None,
+            conciseness=None,
+            star_completeness=None,
+            overall=None,
+            rationale=f"Scoring unavailable: {e}",
+            measurement_status="UNAVAILABLE",
+            rubric_version="v1",
         )
         
     # Calculate overall score deterministically
@@ -198,17 +207,19 @@ async def score_system_design_async(
         result = call_result.result
     except Exception as e:
         logger.error(f"System design scoring failed: {e}")
-        result = _SdResult(  # fallback: LLM unavailable
-            requirements_clarification=0.5,  # fallback
-            high_level_design=0.5,  # fallback
-            scalability=0.5,  # fallback
-            data_modeling=0.5,  # fallback
-            api_design=0.5,  # fallback
-            bottleneck_identification=0.5,  # fallback
-            trade_off_reasoning=0.5,  # fallback
-            communication=0.5,  # fallback
-            overall=0.5,  # fallback
-            rationale="Scoring failed — fallback values.",
+        return SystemDesignScore(
+            requirements_clarification=None,
+            high_level_design=None,
+            scalability=None,
+            data_modeling=None,
+            api_design=None,
+            bottleneck_identification=None,
+            trade_off_reasoning=None,
+            communication=None,
+            overall=None,
+            rationale=f"System design scoring unavailable: {e}",
+            measurement_status="UNAVAILABLE",
+            rubric_version="system_design_v1",
         )
 
     weights = {

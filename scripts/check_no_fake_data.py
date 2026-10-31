@@ -82,10 +82,7 @@ def scan() -> list[str]:
                         # Allow the dev-bypass UUID in settings.py
                         if "00000000" in m.group() and rel in _ALLOWED_FILES:
                             continue
-                        # Allow legitimate LLM-failure fallback lines
-                        line_text = lines_list[lineno - 1] if lineno <= len(lines_list) else ""
-                        if "fallback" in line_text.lower() or "# scoring failed" in line_text.lower():
-                            continue
+                        # Truthful data: comments like 'fallback' or 'scoring failed' do NOT bypass checks
                         violations.append(f"{rel}:{lineno}: [{desc}] {m.group()[:80]}")
     return violations
 
