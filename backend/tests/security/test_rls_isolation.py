@@ -23,7 +23,7 @@ async def db_session():
             pass
     except Exception as e:
         await engine.dispose()
-        pytest.skip(f"Database not accessible, skipping real RLS tests: {e}")
+        raise RuntimeError(f"Database not accessible for RLS tests: {e}")
 
     async with AsyncSessionLocal() as session:
         yield session

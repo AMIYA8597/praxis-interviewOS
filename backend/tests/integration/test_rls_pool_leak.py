@@ -7,16 +7,10 @@ from packages.config.settings import settings
 
 pytestmark = pytest.mark.asyncio
 
-# Only run when an explicit CI/test DATABASE_URL is provided via environment variable,
-# so the test doesn't attempt to connect to a non-existent local Postgres on developer
-# machines where only the default placeholder URL is present.
-_requires_postgres = pytest.mark.skipif(
     not os.environ.get("DATABASE_URL"),
-    reason="requires DATABASE_URL env var pointing to a real PostgreSQL instance",
 )
 
 
-@_requires_postgres
 async def test_connection_pool_isolation():
     # Prove that transaction-local settings do not leak across pooled connections
     # We create a pool with exactly 1 connection to force reuse.

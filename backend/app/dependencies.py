@@ -39,17 +39,23 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
         try:
             auth_header = request.headers.get("Authorization")
             if auth_header and auth_header.startswith("Bearer "):
-                token = auth_header.split(" ")[1]
-                import jwt
+                token = auth_header.split(" ", 1)[1].strip()
+                redis = getattr(request.app.state, "redis_pool", None)
                 try:
-                    payload = jwt.decode(token, options={"verify_signature": False})
-                    sub = payload.get("sub")
+                    # RLS identity: derive claims ONLY from verified JWT
+                    claims = await verify_jwt(token, redis)
+                    sub = claims.get("sub")
                     if sub:
                         import json
                         from sqlalchemy import text
-                        claims_str = json.dumps({"sub": sub})
-                        await session.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims_str})
+                        claims_str = json.dumps(claims)
+                        await session.execute(
+                            text("SELECT set_config('request.jwt.claims', :claims, true)"),
+                            {"claims": claims_str},
+                        )
                 except Exception:
+                    # Forged or invalid JWT fails verification: claims are NEVER set,
+                    # so RLS yields 0 rows for tenant queries.
                     pass
             yield session
         except Exception:
