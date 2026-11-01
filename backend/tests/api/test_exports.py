@@ -2,9 +2,8 @@
 Tests for POST/GET /api/v1/export endpoints.
 """
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.dependencies import get_db_session

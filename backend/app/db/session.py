@@ -18,10 +18,16 @@ def create_engine(cfg: Optional[Settings] = None, *, url: Optional[str] = None) 
             pool_recycle=cfg.DB_POOL_RECYCLE_S,
             pool_pre_ping=cfg.DB_POOL_PRE_PING,
         )
-        if "asyncpg" in url and cfg.DB_STATEMENT_TIMEOUT_MS:
-            kwargs["connect_args"] = {
-                "server_settings": {"statement_timeout": str(cfg.DB_STATEMENT_TIMEOUT_MS)},
+        if "asyncpg" in url:
+            connect_args = {
+                "statement_cache_size": 0,
+                "prepared_statement_cache_size": 0,
             }
+            if cfg.DB_STATEMENT_TIMEOUT_MS:
+                connect_args["server_settings"] = {
+                    "statement_timeout": str(cfg.DB_STATEMENT_TIMEOUT_MS)
+                }
+            kwargs["connect_args"] = connect_args
     return create_async_engine(url, **kwargs)
 
 

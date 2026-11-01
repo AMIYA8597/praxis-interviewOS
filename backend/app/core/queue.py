@@ -14,6 +14,11 @@ async def create_arq_pool(redis_url: str):
         from arq.connections import RedisSettings
 
         rs = RedisSettings.from_dsn(redis_url)
+        if redis_url.startswith("rediss://"):
+            rs.ssl = True
+            from packages.config.settings import settings
+            if getattr(settings, "REDIS_SSL_CA_CERTS", None):
+                rs.ssl_ca_certs = settings.REDIS_SSL_CA_CERTS
         rs.conn_retries = 0  # fail fast at API startup; enqueue() then reports unavailability
         rs.conn_timeout = 2
         return await create_pool(rs)

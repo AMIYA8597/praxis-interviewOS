@@ -8,13 +8,11 @@ Requirements:
   - spec.26: All untrusted content treated as data, never instructions
   - spec.72: AI security — candidate content cannot override system policy
 """
-import pytest
 
 from praxis_ai_gateway.prompt_builder import PromptBuilder
 from praxis_ai_gateway.output_safety import (
     validate_text_output,
     validate_structured_output,
-    SafetyReport,
 )
 
 

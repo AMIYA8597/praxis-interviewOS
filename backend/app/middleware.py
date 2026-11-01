@@ -11,6 +11,7 @@ from backend.app.core.context import (
     candidate_id_ctx,
     request_id_ctx,
     session_id_ctx,
+    trace_id_ctx,
     user_id_ctx,
 )
 
@@ -62,19 +63,30 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         request_id = _resolve_request_id(request.headers.get("X-Request-ID"))
+        trace_id = request.headers.get("X-Trace-ID")
+        if not trace_id:
+            traceparent = request.headers.get("traceparent")
+            if traceparent and len(traceparent.split("-")) >= 3:
+                trace_id = traceparent.split("-")[1]
+
         tokens = [
             (request_id_ctx, request_id_ctx.set(request_id)),
+            (trace_id_ctx, trace_id_ctx.set(trace_id)),
             (user_id_ctx, user_id_ctx.set(None)),
             (candidate_id_ctx, candidate_id_ctx.set(None)),
             (session_id_ctx, session_id_ctx.set(None)),
         ]
         request.state.request_id = request_id
+        if trace_id:
+            request.state.trace_id = trace_id
         started = time.perf_counter()
         status_code = 500
         try:
             response = await call_next(request)
             status_code = response.status_code
             response.headers["X-Request-ID"] = request_id
+            if trace_id:
+                response.headers["X-Trace-ID"] = trace_id
             return response
         finally:
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
@@ -86,7 +98,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
                 "http_status": status_code,
                 "duration_ms": duration_ms,
             }
-            for key in ("user_id", "candidate_id"):
+            for key in ("user_id", "candidate_id", "session_id", "trace_id"):
                 value = getattr(request.state, key, None)
                 if value:
                     extra[key] = str(value)

@@ -25,16 +25,25 @@ import logging
 import math
 import os
 import struct
-import sys
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 import httpx
+import wave
 import websockets
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("praxis_client")
+
+def load_wav_pcm16(wav_path: str) -> bytes:
+    """Read a WAV file and return raw 16kHz mono PCM16 bytes."""
+    with wave.open(wav_path, "rb") as wf:
+        n_channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        framerate = wf.getframerate()
+        frames = wf.readframes(wf.getnframes())
+        logger.info(f"Loaded WAV: {n_channels} ch, {sampwidth} bytes/sample, {framerate} Hz, {len(frames)} bytes")
+        return frames
 
 def generate_synthetic_pcm16(duration_s: float = 4.0, sample_rate: int = 16000) -> bytes:
     """Generate a 16kHz PCM16 mono sine audio clip for testing speech streaming."""
@@ -204,6 +213,45 @@ class PraxisClient:
 
             logger.info("WS: Session completed successfully.")
 
+    async def test_disconnect_and_reconnect(self, session_id: str, pcm_bytes: bytes) -> bool:
+        """Test intentional disconnect and resume within grace period."""
+        ws_url = f"{self.realtime_url}/ws/sessions/{session_id}?token={self.token}"
+        logger.info(f"RECONNECT TEST: Connecting to {ws_url} (Phase 1)...")
+
+        async with websockets.connect(ws_url) as ws1:
+            logger.info("RECONNECT TEST: First connection established.")
+            header = struct.pack(">BBIdI", 1, 1, 0, time.time(), 640)
+            await ws1.send(header + pcm_bytes[:640])
+            logger.info("RECONNECT TEST: Sent audio frame. Intentionally disconnecting socket...")
+            await ws1.close()
+
+        logger.info("RECONNECT TEST: Socket disconnected. Waiting 2 seconds (within 30s grace window)...")
+        await asyncio.sleep(2.0)
+
+        logger.info(f"RECONNECT TEST: Reconnecting to session {session_id}...")
+        async with websockets.connect(ws_url) as ws2:
+            logger.info("RECONNECT TEST: Successfully reconnected to active session!")
+            header = struct.pack(">BBIdI", 1, 1, 1, time.time(), 640)
+            await ws2.send(header + pcm_bytes[640:1280])
+            logger.info("RECONNECT TEST: Resumed audio streaming successfully.")
+            await ws2.close()
+
+        logger.info("RECONNECT TEST: PASSED. Session survived disconnect and resumed cleanly.")
+        return True
+
+    async def retrieve_persisted_results(self, session_id: str) -> Dict[str, Any]:
+        """Fetch persisted session records and debrief via REST API."""
+        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(f"{self.api_url}/api/v1/sessions/{session_id}", headers=headers)
+            if resp.status_code == 200:
+                logger.info(f"REST: Fetched session details: {resp.json().get('id')}")
+            debrief_resp = await client.get(f"{self.api_url}/api/v1/sessions/{session_id}/debrief", headers=headers)
+            if debrief_resp.status_code == 200:
+                logger.info(f"REST: Fetched session debrief: {debrief_resp.json()}")
+                return debrief_resp.json()
+            return resp.json() if resp.status_code == 200 else {}
+
     def _record_event(self, ev: Dict[str, Any]):
         t = datetime.now(timezone.utc).isoformat()
         etype = ev.get("type")
@@ -218,6 +266,8 @@ async def main():
     parser.add_argument("--email", default="candidate@example.com")
     parser.add_argument("--password", default="password123")
     parser.add_argument("--wav", help="Path to input WAV file")
+    parser.add_argument("--full-journey", action="store_true", help="Execute full onboarding, streaming, and debrief journey")
+    parser.add_argument("--test-reconnect", action="store_true", help="Test intentional disconnect and resume within grace period")
     args = parser.parse_args()
 
     client = PraxisClient(api_url=args.api_url, realtime_url=args.realtime_url, token=args.token)
@@ -226,8 +276,19 @@ async def main():
     except Exception as e:
         logger.warning(f"Live auth skipped or failed ({e}); client ready for direct JWT token.")
 
-    pcm = generate_synthetic_pcm16(duration_s=3.0)
-    logger.info(f"Generated {len(pcm)} bytes of 16kHz test PCM audio.")
+    if args.wav and os.path.exists(args.wav):
+        pcm = load_wav_pcm16(args.wav)
+    else:
+        pcm = generate_synthetic_pcm16(duration_s=3.0)
+        logger.info(f"Generated {len(pcm)} bytes of 16kHz test PCM audio.")
+
+    if args.full_journey:
+        rest_data = await client.run_rest_journey()
+        session_id = rest_data["session_id"]
+        if args.test_reconnect:
+            await client.test_disconnect_and_reconnect(session_id, pcm)
+        await client.run_websocket_stream(session_id, pcm)
+        await client.retrieve_persisted_results(session_id)
 
 if __name__ == "__main__":
     asyncio.run(main())

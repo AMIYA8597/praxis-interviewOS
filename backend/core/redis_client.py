@@ -1,12 +1,22 @@
 import os
+from typing import Any, Optional
 import redis.asyncio as redis
-from typing import Optional, Any
 
 # Concrete connection pool limit as documented in Phase 1.8
 MAX_CONNECTIONS = int(os.environ.get("REDIS_MAX_CONNECTIONS", 10))
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
-_pool = redis.ConnectionPool.from_url(REDIS_URL, max_connections=MAX_CONNECTIONS, decode_responses=True)
+_pool_kwargs = {
+    "max_connections": MAX_CONNECTIONS,
+    "decode_responses": True,
+}
+if REDIS_URL.startswith("rediss://"):
+    _ca_certs = os.environ.get("REDIS_SSL_CA_CERTS")
+    if _ca_certs:
+        _pool_kwargs["ssl_ca_certs"] = _ca_certs
+
+_pool = redis.ConnectionPool.from_url(REDIS_URL, **_pool_kwargs)
+
 
 class StrictRedisClient(redis.Redis):
     """
@@ -30,6 +40,7 @@ class StrictRedisClient(redis.Redis):
                 )
         
         return await super().set(name, value, ex=ex, px=px, **kwargs)
+
 
 def get_redis() -> StrictRedisClient:
     return StrictRedisClient(connection_pool=_pool)

@@ -10,7 +10,6 @@ Proves:
 6. Hidden test cases mask inputs and expected outputs
 7. API / test runner stays alive throughout hostile runs
 """
-import os
 import pytest
 
 from backend.app.services.coding_engine import _execute_code_subprocess, run_code_against_tests

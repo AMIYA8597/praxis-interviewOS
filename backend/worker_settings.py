@@ -68,7 +68,15 @@ async def on_startup(ctx):
         admin_engine = engine
     ctx["admin_db_engine"] = admin_engine
     
-    ctx["redis"] = Redis.from_url(settings.REDIS_URL, decode_responses=True, max_connections=settings.REDIS_MAX_CONNECTIONS)
+    redis_kwargs = {
+        "decode_responses": True,
+        "max_connections": settings.REDIS_MAX_CONNECTIONS,
+    }
+    if settings.REDIS_URL.startswith("rediss://"):
+        redis_kwargs["ssl"] = True
+        if getattr(settings, "REDIS_SSL_CA_CERTS", None):
+            redis_kwargs["ssl_ca_certs"] = settings.REDIS_SSL_CA_CERTS
+    ctx["redis"] = Redis.from_url(settings.REDIS_URL, **redis_kwargs)
     ctx["providers"] = build_providers()
     ctx["gateway"] = build_gateway(settings, ctx["redis"], ctx["db_session_factory"], providers=ctx["providers"])
     from backend.app.core.storage import get_storage_client
@@ -80,17 +88,32 @@ async def on_startup(ctx):
 
     async def _health_handler(reader, writer):
         try:
+            req_line = await reader.readline()
             while True:
                 line = await reader.readline()
                 if line in (b"\r\n", b"\n", b""):
                     break
-            body = b'{"status":"ok","service":"praxis-worker"}\n'
-            resp = (
-                b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
-                + str(len(body)).encode()
-                + b"\r\nConnection: close\r\n\r\n"
-                + body
-            )
+            path = "/"
+            if req_line:
+                parts = req_line.decode("utf-8", errors="ignore").split()
+                if len(parts) > 1:
+                    path = parts[1]
+            if path in ("/health/live", "/health/ready", "/health", "/"):
+                body = b'{"status":"ok","service":"praxis-worker"}\n'
+                resp = (
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                    + str(len(body)).encode()
+                    + b"\r\nConnection: close\r\n\r\n"
+                    + body
+                )
+            else:
+                body = b'{"status":"not_found"}\n'
+                resp = (
+                    b"HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: "
+                    + str(len(body)).encode()
+                    + b"\r\nConnection: close\r\n\r\n"
+                    + body
+                )
             writer.write(resp)
             await writer.drain()
         except Exception:
@@ -125,10 +148,19 @@ async def on_shutdown(ctx):
     logger.info("worker_stopped")
 
 
+def _get_worker_redis_settings() -> RedisSettings:
+    rs = RedisSettings.from_dsn(settings.REDIS_URL)
+    if settings.REDIS_URL.startswith("rediss://"):
+        rs.ssl = True
+        if getattr(settings, "REDIS_SSL_CA_CERTS", None):
+            rs.ssl_ca_certs = settings.REDIS_SSL_CA_CERTS
+    return rs
+
+
 class WorkerSettings:
     on_startup = on_startup
     on_shutdown = on_shutdown
-    redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
+    redis_settings = _get_worker_redis_settings()
     queue_name = settings.ARQ_QUEUE_NAME
 
     functions = [

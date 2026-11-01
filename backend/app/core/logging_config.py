@@ -17,21 +17,35 @@ from backend.app.core.context import snapshot
 
 _STD_ATTRS = set(
     logging.LogRecord("x", logging.INFO, "x", 0, "x", None, None).__dict__.keys()
-) | {"message", "asctime", "request_id", "user_id", "candidate_id", "session_id"}
+) | {"message", "asctime", "request_id", "trace_id", "user_id", "candidate_id", "session_id"}
 
 SENSITIVE_KEYS = {
     "token", "access_token", "refresh_token", "authorization", "jwt", "password",
     "secret", "api_key", "apikey", "service_role_key", "raw_text", "resume_text",
-    "content", "file_bytes", "image_base64",
+    "content", "file_bytes", "image_base64", "email", "user_email", "phone",
+    "phone_number", "ssn", "credit_card",
 }
 
 
 def _redact(key: str, value: Any) -> Any:
     k = key.lower()
-    if k in SENSITIVE_KEYS or k.endswith("_token") or k.endswith("_secret") or k.endswith("_password"):
+    if (
+        k in SENSITIVE_KEYS
+        or k.endswith("_token")
+        or k.endswith("_secret")
+        or k.endswith("_password")
+        or k.endswith("_email")
+        or k.endswith("_key")
+        or "password" in k
+        or "secret" in k
+    ):
         if isinstance(value, (str, bytes)):
             return f"<redacted len={len(value)}>"
         return "<redacted>"
+    if isinstance(value, dict):
+        return {k_: _redact(k_, v_) for k_, v_ in value.items()}
+    if isinstance(value, list):
+        return [_redact(key, item) if isinstance(item, (dict, list)) else item for item in value]
     return value
 
 
@@ -62,10 +76,19 @@ class StructuredFormatter(logging.Formatter):
             "message": record.getMessage(),
             "service": self.service,
         }
-        for key in ("request_id", "user_id", "candidate_id", "session_id"):
+        for key in ("request_id", "trace_id", "user_id", "candidate_id", "session_id"):
             value = getattr(record, key, None)
             if value not in (None, "-"):
                 log_data[key] = value
+
+        if "trace_id" not in log_data:
+            try:
+                from opentelemetry import trace
+                span = trace.get_current_span()
+                if span and span.get_span_context().is_valid:
+                    log_data["trace_id"] = format(span.get_span_context().trace_id, "032x")
+            except Exception:
+                pass
         for key, value in record.__dict__.items():
             if key not in _STD_ATTRS and not key.startswith("_"):
                 log_data[key] = _redact(key, value)

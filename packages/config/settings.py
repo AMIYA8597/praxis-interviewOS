@@ -28,8 +28,8 @@ class Settings(BaseSettings):
         "postgresql://praxis:dev_password@localhost:5432/praxis",
         description="Postgres connection string (postgresql:// or postgresql+asyncpg://)",
     )
-    DB_POOL_SIZE: int = Field(10, ge=1)
-    DB_MAX_OVERFLOW: int = Field(10, ge=0)
+    DB_POOL_SIZE: int = Field(2, ge=1)
+    DB_MAX_OVERFLOW: int = Field(3, ge=0)
     DB_POOL_TIMEOUT_S: int = Field(30, ge=1)
     DB_POOL_RECYCLE_S: int = Field(1800, ge=-1)
     DB_POOL_PRE_PING: bool = True
@@ -62,11 +62,14 @@ class Settings(BaseSettings):
     ENABLE_API_DOCS: Optional[bool] = None
     ENABLE_RATE_LIMIT: bool = True
     TRUSTED_PROXY_COUNT: int = Field(0, ge=0)
+    METRICS_USER: str = Field("prometheus", description="Basic auth username for /metrics")
+    METRICS_PASSWORD: Optional[str] = Field(None, description="Basic auth password or token for /metrics")
 
     REDIS_URL: str = Field("redis://localhost:6379/0", description="Redis connection string")
     REDIS_MAX_CONNECTIONS: int = Field(10, ge=1)
     REDIS_SOCKET_TIMEOUT_S: float = Field(5.0, gt=0)
     REDIS_HEALTH_CHECK_INTERVAL_S: int = Field(30, ge=0)
+    REDIS_SSL_CA_CERTS: Optional[str] = Field(None, description="Path to CA certificate file for rediss:// TLS")
     ARQ_QUEUE_NAME: str = "arq:queue"
     WORKER_MAX_JOBS: int = Field(10, ge=1)
     WORKER_JOB_TIMEOUT_S: int = Field(300, ge=1)
