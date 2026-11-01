@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { listSessions } from '@/lib/api/sessions';
+import { useRouter } from 'next/navigation';
+import { listSessions, createSession } from '@/lib/api/sessions';
 import type { SessionResponse } from '@/lib/api/types';
 import { ApiError } from '@/lib/api/client';
+import { Modal } from '@praxis/ui';
 
 function statusBadge(status: string) {
   const classes: Record<string, string> = {
@@ -22,22 +24,65 @@ function statusBadge(status: string) {
 }
 
 export default function SessionsPage() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<SessionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // New session modal state
+  const [showModal, setShowModal] = useState(false);
+  const [interviewType, setInterviewType] = useState('system_design');
+  const [difficulty, setDifficulty] = useState('medium');
+  const [creating, setCreating] = useState(false);
+
+  const fetchSessions = () => {
+    setLoading(true);
     listSessions(undefined, 50)
-      .then(page => setSessions(page.items))
-      .catch(err => {
+      .then((page) => setSessions(page.items))
+      .catch((err) => {
         setError(err instanceof ApiError ? `${err.status}: ${err.message}` : String(err));
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchSessions();
   }, []);
+
+  const handleCreateSession = async () => {
+    setCreating(true);
+    try {
+      const created = await createSession({
+        interview_type: interviewType,
+        difficulty,
+        mode: 'practice',
+      });
+      setShowModal(false);
+      router.push(`/sessions/${created.id}`);
+    } catch (err: any) {
+      setError(`Failed to create practice session: ${err.message || String(err)}`);
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold">Practice Sessions</h1>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Practice Sessions</h1>
+          <p className="text-sm text-gray-400 mt-1">
+            Real-time interactive mock interviews with speech intelligence & rubric evaluation.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-semibold shadow-sm transition-colors"
+        >
+          + Start Practice Session
+        </button>
+      </div>
 
       {loading && <p className="text-gray-400">Loading…</p>}
       {error && (
@@ -47,9 +92,18 @@ export default function SessionsPage() {
       )}
 
       {!loading && !error && sessions.length === 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded p-12 text-center text-gray-400">
-          <p className="text-lg mb-2">No sessions yet.</p>
-          <p className="text-sm">Open the PRAXIS desktop app to start your first practice interview.</p>
+        <div className="bg-gray-900 border border-gray-800 rounded p-12 text-center text-gray-400 space-y-4">
+          <p className="text-lg">No sessions yet.</p>
+          <p className="text-sm max-w-md mx-auto">
+            Ready to practice? Launch a new live session directly in your browser or through the PRAXIS desktop client.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-semibold shadow-sm"
+          >
+            Start Your First Practice Session
+          </button>
         </div>
       )}
 
@@ -63,17 +117,17 @@ export default function SessionsPage() {
                 <th className="p-4 text-xs uppercase tracking-widest text-gray-400 font-semibold">Type</th>
                 <th className="p-4 text-xs uppercase tracking-widest text-gray-400 font-semibold">Duration</th>
                 <th className="p-4 text-xs uppercase tracking-widest text-gray-400 font-semibold">Status</th>
-                <th className="p-4 text-xs uppercase tracking-widest text-gray-400 font-semibold">Debrief</th>
+                <th className="p-4 text-xs uppercase tracking-widest text-gray-400 font-semibold">Action</th>
               </tr>
             </thead>
             <tbody>
-              {sessions.map(s => (
+              {sessions.map((s) => (
                 <tr key={s.id} className="border-b border-gray-800 hover:bg-gray-800/50">
                   <td className="p-4 font-mono text-sm text-gray-300">
                     {s.created_at ? new Date(s.created_at).toLocaleDateString() : '—'}
                   </td>
                   <td className="p-4 text-sm text-gray-300 capitalize">{s.mode ?? '—'}</td>
-                  <td className="p-4 text-sm text-gray-300 capitalize">{s.interview_type ?? '—'}</td>
+                  <td className="p-4 text-sm text-gray-300 capitalize">{s.interview_type?.replace('_', ' ') ?? '—'}</td>
                   <td className="p-4 text-sm font-mono text-gray-300">
                     {s.duration_s != null ? `${Math.round(s.duration_s / 60)}m` : '—'}
                   </td>
@@ -84,7 +138,15 @@ export default function SessionsPage() {
                         href={`/sessions/${s.id}/debrief`}
                         className="text-indigo-400 hover:text-indigo-300 text-sm font-semibold"
                       >
-                        View →
+                        Debrief →
+                      </Link>
+                    ) : s.status === 'active' || s.status === 'pending' ? (
+                      <Link
+                        href={`/sessions/${s.id}`}
+                        className="text-emerald-400 hover:text-emerald-300 text-sm font-semibold flex items-center gap-1"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Enter Room →
                       </Link>
                     ) : (
                       <span className="text-gray-600 text-sm">—</span>
@@ -95,6 +157,68 @@ export default function SessionsPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Start Session Modal */}
+      {showModal && (
+        <Modal
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+          title="Start Live Practice Session"
+        >
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1">
+                Interview Domain & Focus:
+              </label>
+              <select
+                value={interviewType}
+                onChange={(e) => setInterviewType(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="system_design">System Architecture & Design</option>
+                <option value="coding">Coding & Algorithms</option>
+                <option value="behavioral">Behavioral (STAR Method)</option>
+                <option value="fullstack">Full-Stack Engineering</option>
+                <option value="devops">DevOps & Cloud Infrastructure</option>
+                <option value="ml_engineering">AI/ML & LLM Engineering</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1">
+                Target Difficulty:
+              </label>
+              <select
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="easy">Foundational (Junior / Associate)</option>
+                <option value="medium">Standard (Mid-Level Engineer)</option>
+                <option value="hard">Advanced (Senior / Staff Engineer)</option>
+              </select>
+            </div>
+
+            <div className="pt-4 border-t border-gray-800 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateSession}
+                disabled={creating}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+              >
+                {creating ? 'Starting...' : 'Enter Arena'}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

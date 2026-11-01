@@ -17,3 +17,16 @@ export { Skeleton } from './components/Skeleton';
 export { StatusIndicator } from './components/StatusIndicator';
 export { LatencyBadge } from './components/LatencyBadge';
 export { ProviderBadge } from './components/ProviderBadge';
+
+// Phase 3 Intelligence Components
+export { EvidenceReference } from './components/EvidenceReference';
+export type { EvidenceReferenceProps } from './components/EvidenceReference';
+
+export { ScoreDisplay } from './components/ScoreDisplay';
+export type { ScoreDisplayProps } from './components/ScoreDisplay';
+
+export { ReadinessCard } from './components/ReadinessCard';
+export type { ReadinessCardProps } from './components/ReadinessCard';
+
+export { AudioControl } from './components/AudioControl';
+export type { AudioControlProps, AudioDeviceOption } from './components/AudioControl';
