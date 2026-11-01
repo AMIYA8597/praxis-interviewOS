@@ -53,6 +53,8 @@ for i in range(num_chunks):
     })
 
 # Manually compute embeddings for the seeded chunks to ensure semantic search works
+import pytest
+pytest.importorskip("sentence_transformers", reason="sentence_transformers required for embedding benchmark")
 from sentence_transformers import SentenceTransformer
 model = SentenceTransformer('BAAI/bge-small-en-v1.5')
 fake_embeddings[1000] = model.encode([fake_chunks[1000]["content"]], normalize_embeddings=True)[0]

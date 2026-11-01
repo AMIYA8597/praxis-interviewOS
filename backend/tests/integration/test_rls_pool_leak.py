@@ -1,14 +1,31 @@
 import os
+import psycopg2
 
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from packages.config.settings import settings
 
-pytestmark = pytest.mark.asyncio
 
-    not os.environ.get("DATABASE_URL"),
-)
+def _is_real_postgres() -> bool:
+    url = os.environ.get("DATABASE_URL") or getattr(settings, "DATABASE_URL", "")
+    if not (url.startswith("postgresql://") or url.startswith("postgres://")):
+        return False
+    try:
+        conn = psycopg2.connect(url, connect_timeout=2)
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.skipif(
+        not _is_real_postgres(),
+        reason="Requires reachable real PostgreSQL (DATABASE_URL)",
+    ),
+]
 
 
 async def test_connection_pool_isolation():

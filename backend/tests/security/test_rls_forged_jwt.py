@@ -1,7 +1,6 @@
 import pytest
 import jwt
 from unittest.mock import AsyncMock, MagicMock
-from sqlalchemy import text
 from backend.app.dependencies import get_db_session
 from backend.app.auth import AuthError
 

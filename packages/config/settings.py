@@ -28,8 +28,8 @@ class Settings(BaseSettings):
         "postgresql://praxis:dev_password@localhost:5432/praxis",
         description="Postgres connection string (postgresql:// or postgresql+asyncpg://)",
     )
-    DB_POOL_SIZE: int = Field(10, ge=1)
-    DB_MAX_OVERFLOW: int = Field(10, ge=0)
+    DB_POOL_SIZE: int = Field(2, ge=1)
+    DB_MAX_OVERFLOW: int = Field(3, ge=0)
     DB_POOL_TIMEOUT_S: int = Field(30, ge=1)
     DB_POOL_RECYCLE_S: int = Field(1800, ge=-1)
     DB_POOL_PRE_PING: bool = True

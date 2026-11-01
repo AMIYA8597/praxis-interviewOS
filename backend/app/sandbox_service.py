@@ -13,9 +13,8 @@ import os
 import sys
 import tempfile
 import time
-from typing import Optional
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

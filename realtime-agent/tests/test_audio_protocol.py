@@ -1,9 +1,5 @@
 import struct
 import time
-import pytest
-from realtime_agent.app.main import create_app
-from fastapi.testclient import TestClient
-import jwt
 
 def test_audio_frame_header_unpack():
     # Header format: >BBIdI (18 bytes)

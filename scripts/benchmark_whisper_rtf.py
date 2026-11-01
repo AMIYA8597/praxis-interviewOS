@@ -5,7 +5,6 @@ Benchmark faster-whisper Real-Time Factor (RTF) on 2 vCPU.
 RTF = Processing Time / Audio Duration
 RTF < 1.0 means faster than real-time.
 """
-import os
 import time
 import numpy as np
 from faster_whisper import WhisperModel
