@@ -13,7 +13,7 @@ class GeminiProvider(LLMProvider):
     name = "gemini"
     
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+        self.api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         self._client = httpx.AsyncClient(timeout=30.0)
 
     def capabilities(self) -> ProviderCapabilities:
@@ -52,11 +52,29 @@ class GeminiProvider(LLMProvider):
         return await with_cancellation(self._generate(messages, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _generate(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> LLMResponse:
-        model = kw.get("model", "gemini-1.5-flash")
+        model = kw.get("model") or os.environ.get("GEMINI_MODEL") or "gemini-1.5-flash"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
         
         start = time.perf_counter()
+        gen_config = {}
+        if "temperature" in kw:
+            gen_config["temperature"] = kw["temperature"]
+        elif os.environ.get("LLM_TEMPERATURE"):
+            try:
+                gen_config["temperature"] = float(os.environ["LLM_TEMPERATURE"])
+            except ValueError:
+                pass
+        if "max_tokens" in kw:
+            gen_config["maxOutputTokens"] = kw["max_tokens"]
+        elif os.environ.get("LLM_MAX_TOKENS"):
+            try:
+                gen_config["maxOutputTokens"] = int(os.environ["LLM_MAX_TOKENS"])
+            except ValueError:
+                pass
+
         payload = {"contents": self._format_messages(messages)}
+        if gen_config:
+            payload["generationConfig"] = gen_config
         try:
             resp = await self._client.post(url, json=payload)
             resp.raise_for_status()

@@ -86,6 +86,25 @@ class Settings(BaseSettings):
     MODELS_CONFIG_PATH: str = str(PROJECT_ROOT / "config/models.yaml")
     EMBEDDING_DIM: int = 384
 
+    # AI / LLM Configuration
+    LLM_PROVIDER: str = "openai"
+    LLM_TEMPERATURE: float = 0.7
+    LLM_MAX_TOKENS: int = 2000
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_BASE_URL: Optional[str] = None
+    OPENAI_MODEL: Optional[str] = None
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_BASE_URL: Optional[str] = None
+    DEEPSEEK_MODEL: Optional[str] = None
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: Optional[str] = None
+    FLAN_T5_MODEL_NAME: Optional[str] = None
+    HF_DEVICE: str = "cpu"
+    FLAN_T5_MAX_NEW_TOKENS: int = 512
+    FLAN_T5_TEMPERATURE: float = 0.0
+    FILTERING_MODE: str = "heuristic"
+
     WS_AUTH_TIMEOUT_S: float = Field(10.0, gt=0)
     WS_RECONNECT_GRACE_S: int = Field(30, ge=1)
     # Silence after a question before the interviewer nudges / moves on.
