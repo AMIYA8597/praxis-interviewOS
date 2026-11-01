@@ -37,8 +37,11 @@ class Settings(BaseSettings):
     DB_STATEMENT_TIMEOUT_MS: int = Field(15000, ge=0)
 
     SUPABASE_URL: Optional[str] = None
+    SUPABASE_PUBLISHABLE_KEY: Optional[str] = None
     SUPABASE_ANON_KEY: Optional[str] = None
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
+    DIRECT_URL: Optional[str] = None
+    LOCAL_DATABASE_URL: Optional[str] = None
     # Legacy HS256 projects sign access tokens with this shared secret.
     SUPABASE_JWT_SECRET: Optional[str] = None
     JWT_AUDIENCE: str = "authenticated"

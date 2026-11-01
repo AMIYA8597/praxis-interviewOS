@@ -9,11 +9,21 @@ from praxis_ai_gateway.context_packer import pack_context
 from praxis_ai_gateway.embeddings import embed_texts
 from praxis_ai_gateway.chunking import chunk_text
 
-DB_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/interviewos"
+import os
+DB_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/praxis")
+if DB_URL.startswith("postgresql://"):
+    DB_URL = DB_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 @pytest.mark.live_provider
 async def test_hybrid_retrieval():
-    engine = create_async_engine(DB_URL)
+    try:
+        engine = create_async_engine(DB_URL)
+        async with engine.begin() as conn:
+            ext_res = await conn.execute(text("SELECT 1 FROM pg_extension WHERE extname = 'vector'"))
+            if not ext_res.first():
+                pytest.skip("pgvector extension not installed on this PostgreSQL instance")
+    except Exception as e:
+        pytest.skip(f"Live database not available: {e}")
     async with engine.begin() as conn:
         # Create a candidate
         res = await conn.execute(text("INSERT INTO candidates (id, email, first_name, last_name) VALUES (gen_random_uuid(), 'test_hybrid@example.com', 'Test', 'Hybrid') RETURNING id"))

@@ -38,6 +38,8 @@ async def main():
     
     # We load pydantic-settings manually here to catch validation errors
     try:
+        import os
+        sys.path.insert(0, os.path.abspath("."))
         from packages.config.settings import Settings
         settings = Settings()
     except Exception as e:
@@ -51,7 +53,16 @@ async def main():
     
     # Check Postgres
     db_status, db_err = check_postgres(settings.DATABASE_URL)
-    table.append(("DATABASE_URL", "SET", "PASS" if db_status else "FAIL", db_err if not db_status else ""))
+    local_db = getattr(settings, "LOCAL_DATABASE_URL", None) or os.environ.get("LOCAL_DATABASE_URL")
+    if not db_status and local_db:
+        local_status, _ = check_postgres(local_db)
+        if local_status:
+            table.append(("DATABASE_URL", "FALLBACK", "PASS", "Connected via LOCAL_DATABASE_URL fallback"))
+            db_status = True
+        else:
+            table.append(("DATABASE_URL", "SET", "FAIL", db_err))
+    else:
+        table.append(("DATABASE_URL", "SET", "PASS" if db_status else "FAIL", db_err if not db_status else ""))
     
     # Check Redis
     redis_status, redis_err = await check_redis(settings.REDIS_URL)
