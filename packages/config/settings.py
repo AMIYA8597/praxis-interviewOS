@@ -105,6 +105,15 @@ class Settings(BaseSettings):
     FLAN_T5_TEMPERATURE: float = 0.0
     FILTERING_MODE: str = "heuristic"
 
+    # BYO Provider Secrets & Encryption
+    FERNET_KEY: Optional[str] = None
+    FERNET_KEY_OLD: Optional[str] = None
+    GROQ_API_KEY: Optional[str] = None
+    ANTHROPIC_API_KEY: Optional[str] = None
+    XAI_API_KEY: Optional[str] = None
+    FREE_TIER_MODE: bool = True
+    FREE_TIER_BUDGET_DAILY_USD: float = 0.50
+
     WS_AUTH_TIMEOUT_S: float = Field(10.0, gt=0)
     WS_RECONNECT_GRACE_S: int = Field(30, ge=1)
     # Silence after a question before the interviewer nudges / moves on.

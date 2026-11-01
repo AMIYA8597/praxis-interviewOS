@@ -10,7 +10,7 @@
     "build:web": "pnpm --filter web run build",
     "test": "pnpm -r run test",
     "lint": "eslint . --ext .ts,.tsx",
-    "type-check": "pnpm -r exec tsc --noEmit",
+    "type-check": "pnpm -r --if-present run typecheck",
     "prepare": "husky"
   },
   "devDependencies": {

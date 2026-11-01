@@ -22,6 +22,7 @@ class MockWebSocket {
   readyState = WebSocket.OPEN;
 
   constructor() {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     mockWsInstance = this;
   }
 }

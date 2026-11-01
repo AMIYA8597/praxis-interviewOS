@@ -1,7 +1,7 @@
 import { saveCredential, getCredential } from '../src/main/storage';
 
 jest.mock('../src/main/storage', () => {
-  let store: any = {};
+  const store: Record<string, any> = {};
   return {
     saveCredential: jest.fn((k, v) => { store[k] = v; }),
     getCredential: jest.fn((k) => store[k] || null)

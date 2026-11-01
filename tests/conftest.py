@@ -1,4 +1,6 @@
 import os
+os.environ["ENABLE_RATE_LIMIT"] = "false"
+import os
 import sys
 import psycopg2
 import pytest

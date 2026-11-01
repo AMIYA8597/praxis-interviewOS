@@ -17,6 +17,17 @@ class GeminiProvider(LLMProvider):
         self._client = httpx.AsyncClient(timeout=30.0)
 
     def capabilities(self) -> ProviderCapabilities:
+        if not self.api_key:
+            return ProviderCapabilities(
+                streaming=False,
+                structured_output=False,
+                vision=False,
+                embeddings=False,
+                realtime_audio=False,
+                max_context_tokens=0,
+                is_local=False,
+                is_free_tier=False,
+            )
         return ProviderCapabilities(
             streaming=True,
             structured_output=True,
@@ -33,11 +44,15 @@ class GeminiProvider(LLMProvider):
             if exc.response.status_code in [401, 403]:
                 raise ProviderAuthError("Gemini auth error") from exc
             elif exc.response.status_code == 429:
-                raise ProviderRateLimitError("Gemini rate limited") from exc
+                retry_after = exc.response.headers.get("Retry-After")
+                msg = f"Gemini rate limited (Retry-After: {retry_after})" if retry_after else "Gemini rate limited"
+                raise ProviderRateLimitError(msg) from exc
             elif exc.response.status_code >= 500:
                 raise ProviderServerError("Gemini server error") from exc
         elif isinstance(exc, httpx.TimeoutException):
             raise ProviderTimeoutError("Gemini timeout") from exc
+        elif isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+            raise ProviderServerError("Gemini connection failed") from exc
         raise exc
 
     def _format_messages(self, messages: list[LLMMessage]):

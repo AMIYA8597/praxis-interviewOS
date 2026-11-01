@@ -38,6 +38,8 @@ class OllamaProvider(LLMProvider):
                 raise ProviderServerError("Ollama server error") from exc
         elif isinstance(exc, httpx.TimeoutException):
             raise ProviderTimeoutError("Ollama timeout") from exc
+        elif isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+            raise ProviderServerError("Ollama server unreachable or not running") from exc
         raise exc
 
     async def generate(self, messages, cancellation_token=None, **kw):

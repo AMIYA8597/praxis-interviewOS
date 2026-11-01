@@ -99,6 +99,38 @@ export default function JobMatchPage() {
           {match.methodology_version && (
             <p className="text-xs text-gray-600">Methodology: {match.methodology_version}</p>
           )}
+          {Array.isArray(match.breakdown) && match.breakdown.length > 0 && (
+            <div className="mt-4 border-t border-gray-800 pt-4 space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Skill Match Breakdown</h3>
+              <div className="space-y-2">
+                {(match.breakdown as Array<{ requirement: string; priority?: string; match_level: 'matched' | 'partial' | 'missing'; evidence: string | null }>).map((item, idx) => (
+                  <div key={idx} className="bg-gray-950/60 p-3 rounded border border-gray-800/80 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-gray-200">{item.requirement}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded font-semibold uppercase ${
+                        item.match_level === 'matched'
+                          ? 'bg-green-900/40 text-green-300'
+                          : item.match_level === 'partial'
+                          ? 'bg-yellow-900/40 text-yellow-300'
+                          : 'bg-red-900/40 text-red-300'
+                      }`}>
+                        {item.match_level}
+                      </span>
+                    </div>
+                    {item.evidence ? (
+                      <p className="text-xs text-gray-400 mt-1 italic border-l-2 border-indigo-500/50 pl-2">
+                        Evidence: {item.evidence}
+                      </p>
+                    ) : item.match_level === 'missing' ? (
+                      <p className="text-xs text-red-400/80 mt-1">
+                        Skill gap detected: recommend practice &amp; study.
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <p className="text-xs text-gray-500 mt-2 italic">
             PRAXIS readiness estimate — not a guarantee of hiring outcomes.
           </p>

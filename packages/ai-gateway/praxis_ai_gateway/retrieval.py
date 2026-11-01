@@ -43,7 +43,8 @@ async def vector_search(query: str, candidate_id: str, db: AsyncEngine, k: int =
             AND NOT EXISTS (
                 SELECT 1 FROM resume_claims rc
                 JOIN resume_versions rv ON rv.id = rc.resume_version_id
-                WHERE rv.document_id = d.id 
+                JOIN resumes r ON r.id = rv.resume_id
+                WHERE r.document_id = d.id
                   AND rc.verified_by_user = false
                   AND dc.content ILIKE '%' || rc.claim_text || '%'
             )
@@ -77,7 +78,8 @@ async def fulltext_search(query: str, candidate_id: str, db: AsyncEngine, k: int
             AND NOT EXISTS (
                 SELECT 1 FROM resume_claims rc
                 JOIN resume_versions rv ON rv.id = rc.resume_version_id
-                WHERE rv.document_id = d.id 
+                JOIN resumes r ON r.id = rv.resume_id
+                WHERE r.document_id = d.id
                   AND rc.verified_by_user = false
                   AND dc.content ILIKE '%' || rc.claim_text || '%'
             )

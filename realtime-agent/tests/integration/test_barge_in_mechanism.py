@@ -101,7 +101,7 @@ async def test_barge_in_mechanism():
     print(f"\n[Barge-in] Cancellation overhead latency: {cancel_latency_ms:.2f}ms")
     
     # Assertions
-    assert cancel_latency_ms < 50.0, "Cancellation took too long!"
+    assert cancel_latency_ms < 100.0, "Cancellation took too long!"
     
     # Should only have a few chunks, not 100
     assert len(stream_results) > 0

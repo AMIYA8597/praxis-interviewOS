@@ -407,6 +407,28 @@ async def analyze_job(ctx: Dict[str, Any], job_id: str):
                 """),
                 reqs,
             )
+
+        # Compute explainable match against candidate facts
+        try:
+            from sqlalchemy.ext.asyncio import AsyncSession
+            from backend.app.repositories import jobs as jobs_repo
+            from backend.app.services.matching import compute_explainable_match
+
+            req_dicts = [{"skill": r.skill_text, "priority": r.priority} for r in bp.job_requirements]
+            match_res = await compute_explainable_match(db, candidate_id, req_dicts)
+            overall_pct = match_res.get("overall_score_percentage", 0)
+            score_fraction = round(overall_pct / 100.0, 2)
+            session = AsyncSession(bind=conn, expire_on_commit=False)
+            await jobs_repo.upsert_match(
+                session,
+                job_id=job_id,
+                candidate_id=candidate_id,
+                overall_score=score_fraction,
+                methodology_version=match_res.get("methodology", "hybrid_rag_rrf_v1"),
+                breakdown=match_res.get("breakdown", []),
+            )
+        except Exception as e:
+            logger.warning("compute_job_match_failed", extra={"job_id": job_id, "error_type": type(e).__name__})
         await conn.execute(
             text("""
                 UPDATE jobs SET processing_status = 'ready', seniority_signal = :sen, error_message = NULL

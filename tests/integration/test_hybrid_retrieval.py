@@ -26,7 +26,10 @@ async def test_hybrid_retrieval():
         pytest.skip(f"Live database not available: {e}")
     async with engine.begin() as conn:
         # Create a candidate
-        res = await conn.execute(text("INSERT INTO candidates (id, email, first_name, last_name) VALUES (gen_random_uuid(), 'test_hybrid@example.com', 'Test', 'Hybrid') RETURNING id"))
+        import uuid
+        profile_id = uuid.uuid4()
+        await conn.execute(text("INSERT INTO profiles (id) VALUES (:pid)"), {"pid": profile_id})
+        res = await conn.execute(text("INSERT INTO candidates (id, profile_id, full_name) VALUES (gen_random_uuid(), :pid, 'Test Hybrid') RETURNING id"), {"pid": profile_id})
         candidate_id = res.scalar()
         
         # Create a document
@@ -34,7 +37,9 @@ async def test_hybrid_retrieval():
         doc_id = res.scalar()
         
         # Insert a resume version
-        res = await conn.execute(text("INSERT INTO resume_versions (id, candidate_id, document_id) VALUES (gen_random_uuid(), :cid, :doc_id) RETURNING id"), {"cid": candidate_id, "doc_id": doc_id})
+        res = await conn.execute(text("INSERT INTO resumes (id, candidate_id, document_id) VALUES (gen_random_uuid(), :cid, :doc_id) RETURNING id"), {"cid": candidate_id, "doc_id": doc_id})
+        resume_id = res.scalar()
+        res = await conn.execute(text("INSERT INTO resume_versions (id, resume_id, version_number) VALUES (gen_random_uuid(), :rid, 1) RETURNING id"), {"rid": resume_id})
         resume_version_id = res.scalar()
 
         # Resume text

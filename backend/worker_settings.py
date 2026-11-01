@@ -84,7 +84,8 @@ async def on_startup(ctx):
     ctx["storage"] = get_storage_client()
 
     # Start lightweight HTTP health server for Cloud Run
-    health_port = int(os.environ.get("PORT", "8080"))
+    health_host = os.environ.get("HEALTH_HOST", "127.0.0.1" if os.name == "nt" else "0.0.0.0")
+    health_port = int(os.environ.get("PORT", "8089" if os.name == "nt" else "8080"))
 
     async def _health_handler(reader, writer):
         try:
@@ -126,7 +127,7 @@ async def on_startup(ctx):
                 pass
 
     try:
-        health_server = await asyncio.start_server(_health_handler, "0.0.0.0", health_port)
+        health_server = await asyncio.start_server(_health_handler, health_host, health_port)
         ctx["health_server"] = health_server
         logger.info("worker_health_server_listening", extra={"port": health_port})
     except Exception as e:

@@ -13,4 +13,4 @@ for _mod in [m for m in sys.modules if m == "praxis_ai_gateway" or m.startswith(
     if not os.path.abspath(_f).startswith(ROOT):
         del sys.modules[_mod]
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
-os.environ.setdefault("ENABLE_RATE_LIMIT", "false")
+os.environ["ENABLE_RATE_LIMIT"] = "false"

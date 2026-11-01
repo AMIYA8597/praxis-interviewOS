@@ -3,8 +3,8 @@
 PRAXIS InterviewOS — Security Configuration Verifier
 Automated check of Electron, Next.js, FastAPI, and Database security baselines.
 """
-import os
-import re
+
+
 import sys
 from pathlib import Path
 

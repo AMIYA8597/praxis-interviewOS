@@ -68,6 +68,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
   cleanupScreenshotCapture();
 });
 
@@ -80,16 +81,23 @@ ipcMain.handle('system.getStatus', () => {
   };
 });
 
+let activeAudioSourceId: string | null = null;
+const registeredShortcuts = new Map<string, string>();
+
 ipcMain.handle('audio.getSources', async () => {
   return await getAudioSources();
 });
 
 ipcMain.handle('audio.startCapture', (_event, sourceId: string) => {
-  // Stub for audio start capture
+  activeAudioSourceId = sourceId;
+  mainWindow?.webContents.send('audio.captureStarted', sourceId);
+  return { success: true, sourceId };
 });
 
 ipcMain.handle('audio.stopCapture', () => {
-  // Stub for audio stop capture
+  activeAudioSourceId = null;
+  mainWindow?.webContents.send('audio.captureStopped');
+  return { success: true };
 });
 
 ipcMain.handle('screen.getSources', async () => {
@@ -115,13 +123,23 @@ ipcMain.handle('screen.captureNow', async () => {
 });
 
 ipcMain.handle('shortcut.register', (_event, name: string, accelerator: string) => {
-  globalShortcut.register(accelerator, () => {
+  if (registeredShortcuts.has(name)) {
+    globalShortcut.unregister(registeredShortcuts.get(name)!);
+  }
+  registeredShortcuts.set(name, accelerator);
+  return globalShortcut.register(accelerator, () => {
     mainWindow?.webContents.send(`shortcut.${name}`);
   });
 });
 
 ipcMain.handle('shortcut.unregister', (_event, name: string) => {
-  // Can't easily map name to accelerator here without state, but stub for now.
+  const accelerator = registeredShortcuts.get(name);
+  if (accelerator) {
+    globalShortcut.unregister(accelerator);
+    registeredShortcuts.delete(name);
+    return true;
+  }
+  return false;
 });
 
 ipcMain.handle('storage.set', (_event, key: string, value: string) => {

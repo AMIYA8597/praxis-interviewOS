@@ -4,7 +4,7 @@ PRAXIS InterviewOS — Software Bill of Materials (SBOM) Generator
 Generates a consolidated CycloneDX / SPDX compatible JSON inventory of all dependencies.
 """
 import json
-import os
+
 import sys
 from datetime import datetime, timezone
 from pathlib import Path

@@ -22,11 +22,16 @@ class GroqProvider(LLMProvider):
 
     def capabilities(self) -> ProviderCapabilities:
         if not self.api_key:
-            # Gracefully report unavailable by returning max_context_tokens = 0 or similar,
-            # or in filter_candidates we can just not register it.
-            # We'll set is_free_tier=False or something to drop it? No, the prompt says "report unavailable (via capabilities() returning a sentinel, or the registry filtering them out entirely) when no API key is configured".
-            # For free tiers like Groq, it still needs an API key. 
-            pass
+            return ProviderCapabilities(
+                streaming=False,
+                structured_output=False,
+                vision=False,
+                embeddings=False,
+                realtime_audio=False,
+                max_context_tokens=0,
+                is_local=False,
+                is_free_tier=False,
+            )
 
         return ProviderCapabilities(
             streaming=True,
@@ -44,11 +49,15 @@ class GroqProvider(LLMProvider):
             if exc.response.status_code == 401:
                 raise ProviderAuthError("Groq auth error") from exc
             elif exc.response.status_code == 429:
-                raise ProviderRateLimitError("Groq rate limited") from exc
+                retry_after = exc.response.headers.get("Retry-After")
+                msg = f"Groq rate limited (Retry-After: {retry_after})" if retry_after else "Groq rate limited"
+                raise ProviderRateLimitError(msg) from exc
             elif exc.response.status_code >= 500:
                 raise ProviderServerError("Groq server error") from exc
         elif isinstance(exc, httpx.TimeoutException):
             raise ProviderTimeoutError("Groq timeout") from exc
+        elif isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+            raise ProviderServerError("Groq connection failed") from exc
         raise exc
 
     async def generate(self, messages, cancellation_token=None, **kw):
