@@ -52,6 +52,46 @@ async def ready_check(
 
     raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=payload)
 
+@router.get("/health/startup", status_code=status.HTTP_200_OK)
+async def startup_check(db: AsyncSession = Depends(get_db_session)):
+    """Startup probe. Checks DB connectivity and verifies all migrations are current."""
+    try:
+        from scripts.migrate import migration_files
+        all_files = migration_files()
+        expected = {f.name for f in all_files}
+    except Exception:
+        import pathlib
+        mig_dir = pathlib.Path(__file__).resolve().parent.parent.parent.parent / "supabase" / "migrations"
+        expected = {f.name for f in mig_dir.glob("*.sql")}
+
+    try:
+        res = await db.execute(text("SELECT version FROM schema_migrations"))
+        applied = {row[0] for row in res.fetchall()}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"status": "not_ready", "reason": f"schema_migrations unqueryable: {e}"},
+        )
+
+    pending = expected - applied
+    if pending:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "status": "not_ready",
+                "reason": "Pending database migrations",
+                "pending_count": len(pending),
+                "pending": sorted(list(pending)),
+            },
+        )
+
+    return {
+        "status": "ready",
+        "migrations_current": True,
+        "applied_count": len(applied),
+        "total_migrations": len(expected),
+    }
+
 @router.get("/health/providers", status_code=status.HTTP_200_OK)
 async def providers_check(gateway = Depends(get_ai_gateway)):
     """AI Providers readiness snapshot."""

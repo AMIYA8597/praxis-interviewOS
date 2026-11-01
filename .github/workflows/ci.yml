@@ -280,11 +280,12 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build all three images
+    - name: Build all four images
       run: |
         docker build -f docker/Dockerfile.api -t praxis-api:ci-test --target production --load .
         docker build -f docker/Dockerfile.realtime -t praxis-realtime:ci-test --target production --load .
         docker build -f docker/Dockerfile.worker -t praxis-worker:ci-test --target production --load .
+        docker build -f docker/Dockerfile.sandbox -t praxis-sandbox:ci-test --target production --load .
       timeout-minutes: 25
 
     - name: Run and healthcheck praxis-api
@@ -342,7 +343,7 @@ jobs:
 
     - name: Check for secrets in images
       run: |
-        for img in praxis-api:ci-test praxis-realtime:ci-test praxis-worker:ci-test; do
+        for img in praxis-api:ci-test praxis-realtime:ci-test praxis-worker:ci-test praxis-sandbox:ci-test; do
           docker inspect "$img" --format='{{json .Config.Env}}' | \
             python3 -c "
         import json, sys, re

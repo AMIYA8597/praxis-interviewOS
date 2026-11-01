@@ -11,7 +11,11 @@ All counters use the `praxis_` prefix per Prometheus naming conventions.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Response
+import secrets
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -19,6 +23,8 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
+
+from packages.config.settings import settings
 
 router = APIRouter(tags=["observability"])
 
@@ -119,15 +125,58 @@ rate_limit_hits_total = Counter(
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
 
+security = HTTPBasic(auto_error=False)
+
+
+def require_metrics_auth(
+    request: Request,
+    credentials: Optional[HTTPBasicCredentials] = Depends(security),
+) -> bool:
+    """Protect /metrics with Basic Auth or Bearer token."""
+    expected_user = settings.METRICS_USER or "prometheus"
+    expected_pass = settings.METRICS_PASSWORD
+
+    if not expected_pass:
+        if settings.is_production:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Metrics authentication required but unset in production",
+                headers={"WWW-Authenticate": "Basic realm='metrics'"},
+            )
+        # In non-production environments without METRICS_PASSWORD configured,
+        # use standard default credential so unauthenticated scraping is still rejected
+        expected_pass = "praxis_metrics_token"
+
+    # 1. Try Basic Auth credentials
+    if credentials:
+        user_ok = secrets.compare_digest(credentials.username.encode("utf-8"), expected_user.encode("utf-8"))
+        pass_ok = secrets.compare_digest(credentials.password.encode("utf-8"), expected_pass.encode("utf-8"))
+        if user_ok and pass_ok:
+            return True
+
+    # 2. Try Bearer token in Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        if token and secrets.compare_digest(token.encode("utf-8"), expected_pass.encode("utf-8")):
+            return True
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Unauthorized: Authentication required to scrape /metrics",
+        headers={"WWW-Authenticate": "Basic realm='metrics'"},
+    )
+
+
 @router.get(
     "/metrics",
     summary="Prometheus metrics",
     description="Exposes application metrics in Prometheus text exposition format. "
-                "Restrict access to internal scraping network in production.",
+                "Protected by Basic Auth or Bearer token.",
     response_class=Response,
     include_in_schema=False,  # exclude from public OpenAPI — internal endpoint
 )
-async def metrics() -> Response:
+async def metrics(_: bool = Depends(require_metrics_auth)) -> Response:
     return Response(
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,
