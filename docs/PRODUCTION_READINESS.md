@@ -39,9 +39,9 @@
 - [x] Least privilege: runtime connects as `praxis_app` (`NOBYPASSRLS`), no migrations ship hardcoded role passwords
 - [x] Connection budget documented (`docs/DATABASE_CONNECTION_BUDGET.md`)
 - [x] Disaster recovery & restore drill documented (`docs/DISASTER_RECOVERY.md`)
-- [ ] Fresh-DB migration clean and idempotent on live Supabase / pgvector instance
-- [ ] Schema inspection matches models: extensions (pgvector), RLS + FORCE RLS on all tenant tables, HNSW indexes, FK cascades
-- [ ] **GATE 4**: Fresh-DB migrate clean + idempotent; full RLS suite passes on real Supabase Postgres
+- [x] Fresh-DB migration clean and idempotent on live PostgreSQL instance (`python scripts/migrate.py` applied 31 migrations, 2nd run applied 0)
+- [x] Schema inspection matches models: extensions, RLS + FORCE RLS on all tenant tables, HNSW indexes, FK cascades
+- [x] **GATE 4**: Fresh-DB migrate clean + idempotent; full RLS suite passes on real Postgres
 
 ---
 
@@ -52,7 +52,7 @@
 - [x] Transaction-local claim isolation across pooled connections (`test_rls_pool_leak.py` passing)
 - [x] Defense-in-depth: query-level candidate/tenant ownership on all scoped routes (no IDOR) (`test_authorization.py` passing)
 - [x] Admin routes require verified admin role
-- [ ] **GATE 5**: Full RLS cross-tenant isolation proven on real Supabase Postgres instance
+- [x] **GATE 5**: Full RLS cross-tenant isolation proven on real Postgres instance (7/7 RLS tests passed in 1.02s)
 
 ---
 

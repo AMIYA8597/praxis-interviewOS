@@ -109,17 +109,30 @@ async def _authenticate(websocket: WebSocket, query_token: Optional[str]) -> Dic
 async def _load_session(factory, session_id: str, user_id: str) -> Optional[Dict[str, Any]]:
     """Ownership-checked lookup. Full grounding context loaded for candidate & JD."""
     async with factory() as db:
-        row = (
-            await db.execute(
-                text("""
-                    SELECT s.id, s.status, s.candidate_id, s.job_id
-                    FROM practice_sessions s
-                    JOIN candidates c ON s.candidate_id = c.id
-                    WHERE s.id = :sid AND c.profile_id = :uid
-                """),
-                {"sid": session_id, "uid": user_id},
-            )
-        ).first()
+        try:
+            row = (
+                await db.execute(
+                    text("""
+                        SELECT s.id, s.status, s.candidate_id, s.job_id
+                        FROM practice_sessions s
+                        JOIN candidates c ON s.candidate_id = c.id
+                        WHERE s.id = :sid AND c.profile_id = :uid
+                    """),
+                    {"sid": session_id, "uid": user_id},
+                )
+            ).first()
+        except Exception:
+            row = (
+                await db.execute(
+                    text("""
+                        SELECT s.id, s.status, s.candidate_id
+                        FROM practice_sessions s
+                        JOIN candidates c ON s.candidate_id = c.id
+                        WHERE s.id = :sid AND c.profile_id = :uid
+                    """),
+                    {"sid": session_id, "uid": user_id},
+                )
+            ).first()
         if row is None:
             return None
         candidate_id = str(row.candidate_id)

@@ -43,7 +43,7 @@ async def realtime_server():
     conn = sqlite3.connect(temp_db)
     conn.execute("CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, password_hash TEXT)")
     conn.execute("CREATE TABLE candidates (id TEXT PRIMARY KEY, profile_id TEXT)")
-    conn.execute("CREATE TABLE practice_sessions (id TEXT PRIMARY KEY, candidate_id TEXT, status TEXT, ended_at TEXT)")
+    conn.execute("CREATE TABLE practice_sessions (id TEXT PRIMARY KEY, candidate_id TEXT, status TEXT, ended_at TEXT, job_id TEXT)")
     conn.execute("CREATE TABLE session_state_log (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, from_state TEXT, to_state TEXT, reason TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
     conn.execute("CREATE TABLE usage_events (id TEXT PRIMARY KEY, user_id TEXT, was_free_tier BOOLEAN)")
     conn.execute("INSERT INTO usage_events (id, user_id, was_free_tier) VALUES ('evt-1', '00000000-0000-0000-0000-000000000000', false)")
