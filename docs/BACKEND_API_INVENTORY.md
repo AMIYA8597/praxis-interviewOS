@@ -132,6 +132,7 @@ No authentication required.
 |---|---|---|---|---|
 | GET | `/health/live` | No | Liveness probe | `{status: "ok"}` |
 | GET | `/health/ready` | No | Readiness probe (checks DB + Redis) | `{status: "ready"}` or 503 with component details |
+| GET | `/health/startup` | No | Startup probe (checks DB + migrations current) | `{status: "ready", migrations_current: true, applied_count}` or 503 |
 | GET | `/health/providers` | No | AI provider circuit breaker state | `{status, providers: {name: {capabilities, circuit_breaker_state}}}` |
 
 ---
