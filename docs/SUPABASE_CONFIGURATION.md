@@ -13,6 +13,16 @@ PRAXIS requires strict environment separation across distinct Supabase projects:
 > [!CRITICAL]
 > Staging and Production **MUST** be separate Supabase projects. Never execute automated integration or staging tests against the production project.
 
+### 1.1 Configured Supabase Project (InterviewOS)
+- **Project Ref**: `rqbbfegkqmsvthdgoyqk`
+- **Region**: Central EU (Frankfurt, `eu-central-1`)
+- **Project URL**: `https://rqbbfegkqmsvthdgoyqk.supabase.co`
+- **JWKS Endpoint**: `https://rqbbfegkqmsvthdgoyqk.supabase.co/auth/v1/.well-known/jwks.json`
+- **Transaction Pooler (IPv4)**: `aws-1-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true`
+- **Session Pooler (IPv4)**: `aws-1-eu-central-1.pooler.supabase.com:5432/postgres`
+- **Direct Database Host (IPv6)**: `db.rqbbfegkqmsvthdgoyqk.supabase.co:5432/postgres`
+- **Storage Bucket**: `documents` (Private, 10MB limit)
+
 ---
 
 ## 2. Authentication Architecture
