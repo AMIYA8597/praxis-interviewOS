@@ -177,7 +177,7 @@ def test_dev_bypass_is_impossible_in_production(monkeypatch):
                  DATABASE_URL="postgresql://u:strong@db/praxis", CORS_ALLOW_ORIGINS="https://app.example.com")
     with pytest.raises(ValueError):
         Settings(APP_ENV="production", DATABASE_URL="postgresql://u:strong@db/praxis",
-                 CORS_ALLOW_ORIGINS="https://app.example.com")  # no verifier configured
+                 CORS_ALLOW_ORIGINS="https://app.example.com", SUPABASE_URL="", SUPABASE_JWT_SECRET="")  # no verifier configured
     with pytest.raises(ValueError):
         Settings(APP_ENV="production", SUPABASE_URL=SUPABASE_URL, DATABASE_URL="postgresql://u:strong@db/praxis",
                  CORS_ALLOW_ORIGINS="*")

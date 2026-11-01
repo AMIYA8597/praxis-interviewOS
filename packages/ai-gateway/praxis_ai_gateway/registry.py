@@ -35,6 +35,12 @@ class ModelRegistry:
 
     def candidates_for(self, alias: str) -> List[Dict[str, Any]]:
         """Returns ordered list of dicts with provider details."""
+        if alias in self._aliases:
+            return self._aliases[alias]
+        if alias in ("question_generation", "claim_extraction", "claim_grounding", "study_plan_generation", "behavioral_evaluation"):
+            return self._aliases.get("reasoning", [])
+        if alias in ("answer_evaluation", "debrief_generation", "coding_evaluation", "system_design_evaluation"):
+            return self._aliases.get("deep_reasoning", self._aliases.get("reasoning", []))
         return self._aliases.get(alias, [])
 
     def filter_candidates(

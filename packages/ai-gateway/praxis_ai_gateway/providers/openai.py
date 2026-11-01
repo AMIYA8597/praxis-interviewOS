@@ -12,12 +12,23 @@ from praxis_ai_gateway.errors import ProviderAuthError, ProviderRateLimitError, 
 class OpenAIProvider(LLMProvider):
     name = "openai"
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self.api_url = "https://api.openai.com/v1"
+        self.api_url = (
+            base_url
+            or os.environ.get("OPENAI_BASE_URL")
+            or os.environ.get("OPENAI_API_BASE")
+            or "https://api.openai.com/v1"
+        ).rstrip("/")
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        if "openrouter.ai" in self.api_url:
+            headers["HTTP-Referer"] = "https://praxis-interview.com"
+            headers["X-Title"] = "PRAXIS InterviewOS"
         self._client = httpx.AsyncClient(
             timeout=30.0,
-            headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+            headers=headers
         )
 
     def capabilities(self) -> ProviderCapabilities:
@@ -56,11 +67,26 @@ class OpenAIProvider(LLMProvider):
 
     async def _generate(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> LLMResponse:
         start = time.perf_counter()
+        model = kw.get("model") or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
         payload = {
-            "model": kw.get("model", "gpt-4o-mini"),
+            "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "stream": False
+            "stream": False,
         }
+        if "temperature" in kw:
+            payload["temperature"] = kw["temperature"]
+        elif os.environ.get("LLM_TEMPERATURE"):
+            try:
+                payload["temperature"] = float(os.environ["LLM_TEMPERATURE"])
+            except ValueError:
+                pass
+        if "max_tokens" in kw:
+            payload["max_tokens"] = kw["max_tokens"]
+        elif os.environ.get("LLM_MAX_TOKENS"):
+            try:
+                payload["max_tokens"] = int(os.environ["LLM_MAX_TOKENS"])
+            except ValueError:
+                pass
         try:
             resp = await self._client.post(f"{self.api_url}/chat/completions", json=payload)
             resp.raise_for_status()
@@ -78,11 +104,26 @@ class OpenAIProvider(LLMProvider):
             self._handle_error(e)
 
     async def stream(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> AsyncIterator[LLMDelta]:
+        model = kw.get("model") or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
         payload = {
-            "model": kw.get("model", "gpt-4o-mini"),
+            "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "stream": True
+            "stream": True,
         }
+        if "temperature" in kw:
+            payload["temperature"] = kw["temperature"]
+        elif os.environ.get("LLM_TEMPERATURE"):
+            try:
+                payload["temperature"] = float(os.environ["LLM_TEMPERATURE"])
+            except ValueError:
+                pass
+        if "max_tokens" in kw:
+            payload["max_tokens"] = kw["max_tokens"]
+        elif os.environ.get("LLM_MAX_TOKENS"):
+            try:
+                payload["max_tokens"] = int(os.environ["LLM_MAX_TOKENS"])
+            except ValueError:
+                pass
         try:
             async with self._client.stream("POST", f"{self.api_url}/chat/completions", json=payload) as response:
                 response.raise_for_status()
@@ -103,10 +144,11 @@ class OpenAIProvider(LLMProvider):
         return await with_cancellation(self._structured(messages, schema, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _structured(self, messages: list[LLMMessage], schema: type[BaseModel], cancellation_token: Any = None, **kw) -> BaseModel:
+        model = kw.get("model") or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini"
         payload = {
-            "model": kw.get("model", "gpt-4o-mini"),
+            "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
-            "response_format": {"type": "json_object"}
+            "response_format": {"type": "json_object"},
         }
         try:
             resp = await self._client.post(f"{self.api_url}/chat/completions", json=payload)

@@ -22,9 +22,18 @@ temp_db = temp_db_path
 os.environ["DATABASE_URL"] = db_url
 
 def create_access_token(data: dict):
-    # Dummy function for the test
-    import jwt
-    return jwt.encode(data, "dummy_secret", algorithm="HS256")
+    import jwt, time
+    from packages.config.settings import settings
+    now = int(time.time())
+    payload = {
+        "sub": data.get("sub", "00000000-0000-0000-0000-000000000000"),
+        "aud": settings.JWT_AUDIENCE or "authenticated",
+        "iss": settings.jwt_issuer,
+        "iat": now,
+        "exp": now + 3600,
+        **data,
+    }
+    return jwt.encode(payload, "dummy_secret", algorithm="HS256")
 
 import fakeredis
 
@@ -55,6 +64,8 @@ async def realtime_server():
     os.environ["REDIS_URL"] = "redis://localhost:6379/0"
     from packages.config.settings import settings
     settings.DATABASE_URL = db_url
+    os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret"
+    settings.SUPABASE_JWT_SECRET = "dummy_secret"
 
     from realtime_agent.app.main import create_app
     app = create_app()

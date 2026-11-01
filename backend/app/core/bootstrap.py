@@ -47,9 +47,13 @@ def build_providers() -> dict:
         "groq": ("GROQ_API_KEY", "praxis_ai_gateway.providers.groq", "GroqProvider"),
         "openai": ("OPENAI_API_KEY", "praxis_ai_gateway.providers.openai", "OpenAIProvider"),
         "anthropic": ("ANTHROPIC_API_KEY", "praxis_ai_gateway.providers.anthropic", "AnthropicProvider"),
+        "gemini": (("GEMINI_API_KEY", "GOOGLE_API_KEY"), "praxis_ai_gateway.providers.gemini", "GeminiProvider"),
+        "deepseek": ("DEEPSEEK_API_KEY", "praxis_ai_gateway.providers.deepseek", "DeepSeekProvider"),
     }
-    for name, (env_key, module, cls_name) in optional.items():
-        if not os.environ.get(env_key):
+    for name, (env_keys, module, cls_name) in optional.items():
+        if isinstance(env_keys, str):
+            env_keys = (env_keys,)
+        if not any(os.environ.get(k) for k in env_keys):
             continue
         try:
             import importlib

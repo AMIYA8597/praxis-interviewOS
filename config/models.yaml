@@ -32,6 +32,7 @@ aliases:
       model: "llama3.1:8b-instruct-q4_K_M"
       max_latency_ms: 30000
 
+  # Deep reasoning and multi-dimensional scoring (debrief, system design, coding)
   deep_reasoning:
     - provider: "openai"
       model: "gpt-4o"
@@ -46,6 +47,134 @@ aliases:
     - provider: "groq"
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 30000
+
+  # Specialized Phase 2 AI/ML Tasks
+  question_generation:
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 5000
+    - provider: "openai"
+      model: "gpt-4o-mini"
+      max_latency_ms: 5000
+      cost_per_1k_input: 0.00015
+      cost_per_1k_output: 0.00060
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 25000
+
+  answer_evaluation:
+    - provider: "openai"
+      model: "gpt-4o"
+      max_latency_ms: 10000
+      cost_per_1k_input: 0.00500
+      cost_per_1k_output: 0.01500
+    - provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      max_latency_ms: 10000
+      cost_per_1k_input: 0.00300
+      cost_per_1k_output: 0.01500
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 30000
+
+  claim_extraction:
+    - provider: "groq"
+      model: "llama-3.1-8b-instant"
+      max_latency_ms: 2000
+    - provider: "openai"
+      model: "gpt-4o-mini"
+      max_latency_ms: 3000
+      cost_per_1k_input: 0.00015
+      cost_per_1k_output: 0.00060
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 15000
+
+  claim_grounding:
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 5000
+    - provider: "openai"
+      model: "gpt-4o-mini"
+      max_latency_ms: 5000
+      cost_per_1k_input: 0.00015
+      cost_per_1k_output: 0.00060
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 25000
+
+  debrief_generation:
+    - provider: "openai"
+      model: "gpt-4o"
+      max_latency_ms: 15000
+      cost_per_1k_input: 0.00500
+      cost_per_1k_output: 0.01500
+    - provider: "anthropic"
+      model: "claude-3-5-sonnet-20241022"
+      max_latency_ms: 15000
+      cost_per_1k_input: 0.00300
+      cost_per_1k_output: 0.01500
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 30000
+
+  study_plan_generation:
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "openai"
+      model: "gpt-4o-mini"
+      max_latency_ms: 8000
+      cost_per_1k_input: 0.00015
+      cost_per_1k_output: 0.00060
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 30000
+
+  coding_evaluation:
+    - provider: "openai"
+      model: "gpt-4o"
+      max_latency_ms: 12000
+      cost_per_1k_input: 0.00500
+      cost_per_1k_output: 0.01500
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 30000
+
+  system_design_evaluation:
+    - provider: "openai"
+      model: "gpt-4o"
+      max_latency_ms: 12000
+      cost_per_1k_input: 0.00500
+      cost_per_1k_output: 0.01500
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "ollama"
+      model: "llama3.1:8b-instruct-q4_K_M"
+      max_latency_ms: 30000
+
+  behavioral_evaluation:
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 8000
+    - provider: "openai"
+      model: "gpt-4o-mini"
+      max_latency_ms: 8000
+      cost_per_1k_input: 0.00015
+      cost_per_1k_output: 0.00060
     - provider: "ollama"
       model: "llama3.1:8b-instruct-q4_K_M"
       max_latency_ms: 30000

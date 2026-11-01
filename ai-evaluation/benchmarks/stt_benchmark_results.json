@@ -1,0 +1,61 @@
+{
+  "benchmark_timestamp": "2026-11-01T08:22:59Z",
+  "hardware_constraint": "2 vCPU threads (cpu_threads=2, int8)",
+  "model_id": "tiny.en",
+  "model_load_time_s": 3.04,
+  "dataset_count": 4,
+  "mean_rtf": 0.127,
+  "mean_wer": 0.1069,
+  "mean_first_partial_latency_ms": 800.8,
+  "all_under_realtime": true,
+  "details": [
+    {
+      "test_id": "clean_technical",
+      "audio_duration_s": 7.06,
+      "transcription_time_s": 1.147,
+      "rtf": 0.1625,
+      "first_partial_latency_ms": 1146.3,
+      "final_latency_ms": 1146.5,
+      "wer": 0.0,
+      "reference": "In distributed systems, eventual consistency allows replicas to diverge temporarily before converging to the same state.",
+      "hypothesis": "In distributed systems, eventual consistency allows replicas to diverge temporarily before  converging to the same state.",
+      "pass_rtf": true
+    },
+    {
+      "test_id": "accented_english",
+      "audio_duration_s": 6.29,
+      "transcription_time_s": 0.699,
+      "rtf": 0.1112,
+      "first_partial_latency_ms": 699.2,
+      "final_latency_ms": 699.4,
+      "wer": 0.2941,
+      "reference": "We utilized a Redis cluster for low latency session caching and decoupled background jobs with message queues.",
+      "hypothesis": "We utilize the release cluster for low latency session caching and to couple background jobs with message queues.",
+      "pass_rtf": true
+    },
+    {
+      "test_id": "noisy_background",
+      "audio_duration_s": 4.56,
+      "transcription_time_s": 0.66,
+      "rtf": 0.1447,
+      "first_partial_latency_ms": 659.9,
+      "final_latency_ms": 660.1,
+      "wer": 0.0,
+      "reference": "The primary bottleneck was database connection pool exhaustion under high concurrency.",
+      "hypothesis": "The primary bottleneck was database connection pool exhaustion under high concurrency.",
+      "pass_rtf": true
+    },
+    {
+      "test_id": "fast_speech",
+      "audio_duration_s": 7.78,
+      "transcription_time_s": 0.698,
+      "rtf": 0.0898,
+      "first_partial_latency_ms": 697.7,
+      "final_latency_ms": 698.4,
+      "wer": 0.1333,
+      "reference": "We scaled our microservices horizontally across multiple availability zones using Kubernetes and automatic pod autoscaling.",
+      "hypothesis": "We scale our microservices horizontally across multiple availability zones using Kubernetes and automatic pod auto-scaling.",
+      "pass_rtf": true
+    }
+  ]
+}
