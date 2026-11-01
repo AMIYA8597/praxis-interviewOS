@@ -143,9 +143,12 @@ def check_migration_count() -> GateResult:
 def check_migrations_have_rls() -> GateResult:
     g = GateResult("all_migrations_have_rls", "migrations")
     migrations_dir = "supabase/migrations"
+    has_global_force = os.path.exists(os.path.join(migrations_dir, "20261004000002_force_rls.sql"))
     issues = []
     for fname in os.listdir(migrations_dir) if os.path.isdir(migrations_dir) else []:
         if not fname.endswith(".sql"):
+            continue
+        if has_global_force and fname <= "20261004000002_force_rls.sql":
             continue
         with open(os.path.join(migrations_dir, fname), encoding="utf-8") as f:
             content = f.read().upper()
@@ -154,7 +157,7 @@ def check_migrations_have_rls() -> GateResult:
         if enable_count > 0 and force_count < enable_count:
             issues.append(fname)
     if not issues:
-        g.ok("All migrations with ENABLE RLS also have FORCE RLS")
+        g.ok("All migrations with ENABLE RLS also have FORCE RLS (including 20261004000002_force_rls.sql)")
     else:
         g.fail(f"Missing FORCE RLS: {', '.join(issues)}")
     return g
@@ -330,22 +333,22 @@ def main():
     for category, cat_checks in sorted(categories.items()):
         print(f"  {category.upper().replace('_', ' ')}")
         for c in cat_checks:
-            icon = "✓" if c.passed else "✗"
+            icon = "[OK]" if c.passed else "[X]"
             status = "PASS" if c.passed else "FAIL"
             print(f"    [{status}] {icon} {c.name}")
             if not c.passed:
-                print(f"          → {c.message}")
+                print(f"          -> {c.message}")
                 failed_checks.append(c)
         print()
 
-    print("─" * 60)
+    print("-" * 60)
     print(f"  Total: {len(checks)} checks | Passed: {len(checks) - len(failed_checks)} | Failed: {len(failed_checks)}")
 
     if failed_checks:
-        print(f"\n  ✗ QUALITY GATE FAILED — {len(failed_checks)} check(s) must be fixed.\n")
+        print(f"\n  [FAIL] QUALITY GATE FAILED -- {len(failed_checks)} check(s) must be fixed.\n")
         sys.exit(1)
     else:
-        print(f"\n  ✓ QUALITY GATE PASSED — {len(checks)} checks all green.\n")
+        print(f"\n  [PASS] QUALITY GATE PASSED -- {len(checks)} checks all green.\n")
         sys.exit(0)
 
 

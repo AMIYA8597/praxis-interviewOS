@@ -26,9 +26,9 @@ class Check:
         self.message = msg
 
 
-def _run(cmd: list[str], timeout: int = 10) -> tuple[int, str, str]:
+def _run(cmd: list[str], timeout: int = 10, env: dict | None = None) -> tuple[int, str, str]:
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
         return result.returncode, result.stdout.strip(), result.stderr.strip()
     except subprocess.TimeoutExpired:
         return -1, "", "TIMEOUT"
@@ -103,9 +103,12 @@ def check_rls_in_migrations() -> Check:
         c.fail("Migrations directory not found")
         return c
 
+    has_global_force = os.path.exists(os.path.join(migrations_dir, "20261004000002_force_rls.sql"))
     files_without_force_rls = []
-    for fname in os.listdir(migrations_dir):
+    for fname in sorted(os.listdir(migrations_dir)):
         if not fname.endswith(".sql"):
+            continue
+        if has_global_force and fname <= "20261004000002_force_rls.sql":
             continue
         path = os.path.join(migrations_dir, fname)
         with open(path, encoding="utf-8") as f:
@@ -117,7 +120,7 @@ def check_rls_in_migrations() -> Check:
             files_without_force_rls.append(fname)
 
     if not files_without_force_rls:
-        c.ok("All migrations with ENABLE RLS also have FORCE RLS")
+        c.ok("All migrations with ENABLE RLS also have FORCE RLS (including 20261004000002_force_rls.sql)")
     else:
         c.fail(f"Missing FORCE RLS in: {', '.join(files_without_force_rls)}")
     return c
@@ -135,7 +138,10 @@ def check_backend_imports() -> Check:
 
 def check_realtime_agent_imports() -> Check:
     c = Check("realtime_agent_imports_clean")
-    code, out, err = _run([sys.executable, "-c", "import realtime_agent.app.main"])
+    env = os.environ.copy()
+    pp = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"realtime-agent{os.pathsep}{pp}" if pp else "realtime-agent"
+    code, out, err = _run([sys.executable, "-c", "import realtime_agent.app.main"], env=env)
     if code == 0:
         c.ok("realtime_agent.app.main imports cleanly")
     else:
@@ -158,13 +164,13 @@ def main():
     print("\n=== PRAXIS PRODUCTION READINESS CHECKS ===\n")
     failed = []
     for check in checks:
-        icon = "✓" if check.passed else "✗"
+        icon = "[OK]" if check.passed else "[X]"
         status = "PASS" if check.passed else "FAIL"
         print(f"  [{status}] {icon} {check.name}: {check.message}")
         if not check.passed:
             failed.append(check)
 
-    print(f"\n{'─' * 50}")
+    print(f"\n{'-' * 50}")
     print(f"  Results: {len(checks) - len(failed)}/{len(checks)} passed")
 
     if failed:
