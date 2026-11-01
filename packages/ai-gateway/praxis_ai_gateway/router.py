@@ -12,6 +12,7 @@ from praxis_ai_gateway.registry import ModelRegistry
 from praxis_ai_gateway.resilience import CircuitBreaker, with_retries
 from praxis_ai_gateway.budget import BudgetGuard
 from praxis_ai_gateway.persistence import as_uuid_str, resolve_db, safe_write
+from praxis_ai_gateway.errors import AIProviderNotConfiguredError
 
 logger = logging.getLogger("praxis.ai_gateway")
 
@@ -22,14 +23,15 @@ class RoutingContext(BaseModel):
     zero_spend_mode: bool = False
     latency_budget_ms: Optional[int] = None
     preferred_provider: Optional[str] = None
+    allowed_providers: Optional[list[str]] = None
 
 class RoutedCall(BaseModel):
     provider_name: str
     model: str
     result: Any
 
-class AllProvidersUnavailableError(Exception):
-    pass
+class AllProvidersUnavailableError(AIProviderNotConfiguredError):
+    error_code = "AI_PROVIDER_NOT_CONFIGURED"
 
 class GatewayRouter:
     def __init__(
@@ -47,6 +49,19 @@ class GatewayRouter:
         # `session_factory` instead so telemetry uses short-lived sessions.
         self.db = resolve_db(db, session_factory)
         self.budget_guard = BudgetGuard(redis, self.db)
+
+    async def check_provider_health(self) -> Dict[str, bool]:
+        """Check live connectivity/health of all registered providers."""
+        results = {}
+        for name, provider in self.providers.items():
+            if hasattr(provider, "check_health"):
+                try:
+                    results[name] = await provider.check_health()
+                except Exception:
+                    results[name] = False
+            else:
+                results[name] = bool(provider.capabilities().max_context_tokens > 0)
+        return results
 
     async def route(self, task: str, context: RoutingContext, method_name: str, *args, cancellation_token: Any = None, **kw) -> RoutedCall:
         if method_name == "generate_structured":
@@ -79,11 +94,15 @@ class GatewayRouter:
             local_only=context.local_only
         )
         
+        if context.allowed_providers:
+            allowed = set(context.allowed_providers)
+            candidates = [c for c in candidates if c[0].name in allowed]
+
         if context.preferred_provider:
             candidates = sorted(candidates, key=lambda c: c[0].name != context.preferred_provider)
             
         if not candidates:
-            raise AllProvidersUnavailableError("No configured providers match the context requirements.")
+            raise AllProvidersUnavailableError(f"No configured providers match requirements for task '{task}' (AI_PROVIDER_NOT_CONFIGURED)")
 
         if method_name == "stream":
             return RoutedCall(

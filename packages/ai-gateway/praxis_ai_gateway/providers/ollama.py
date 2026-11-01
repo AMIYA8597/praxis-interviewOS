@@ -28,6 +28,25 @@ class OllamaProvider(LLMProvider):
             is_free_tier=True
         )
 
+    async def check_health(self) -> bool:
+        """Check whether the Ollama server is alive and reachable."""
+        try:
+            resp = await self._client.get(f"{self.base_url}/api/tags", timeout=2.0)
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    async def list_models(self) -> list[str]:
+        """List currently downloaded model names in the Ollama instance."""
+        try:
+            resp = await self._client.get(f"{self.base_url}/api/tags", timeout=3.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                return [m.get("name") for m in data.get("models", []) if "name" in m]
+            return []
+        except Exception:
+            return []
+
     def _handle_error(self, exc: Exception):
         if isinstance(exc, httpx.HTTPStatusError):
             if exc.response.status_code == 401:

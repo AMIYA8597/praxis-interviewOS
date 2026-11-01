@@ -16,3 +16,8 @@ class ProviderTimeoutError(ProviderError):
 class ProviderServerError(ProviderError):
     """Provider returned a 5xx error. Retryable."""
     pass
+
+class AIProviderNotConfiguredError(ProviderError):
+    """Raised when no compatible, configured AI provider is available for the requested task."""
+    error_code = "AI_PROVIDER_NOT_CONFIGURED"
+

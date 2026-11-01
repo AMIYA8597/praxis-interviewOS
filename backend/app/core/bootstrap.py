@@ -38,29 +38,63 @@ def configure_tracing(cfg: Settings, service: str) -> None:
     logger.info("tracing_enabled", extra={"otel_endpoint": cfg.OTEL_EXPORTER_OTLP_ENDPOINT})
 
 
-def build_providers() -> dict:
+def build_providers(cfg: Optional[Settings] = None) -> dict:
     """Instantiate every provider whose prerequisites are configured."""
     from praxis_ai_gateway.providers.ollama import OllamaProvider
 
-    providers = {"ollama": OllamaProvider(base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"))}
-    optional = {
-        "groq": ("GROQ_API_KEY", "praxis_ai_gateway.providers.groq", "GroqProvider"),
-        "openai": ("OPENAI_API_KEY", "praxis_ai_gateway.providers.openai", "OpenAIProvider"),
-        "anthropic": ("ANTHROPIC_API_KEY", "praxis_ai_gateway.providers.anthropic", "AnthropicProvider"),
-        "gemini": (("GEMINI_API_KEY", "GOOGLE_API_KEY"), "praxis_ai_gateway.providers.gemini", "GeminiProvider"),
-        "deepseek": ("DEEPSEEK_API_KEY", "praxis_ai_gateway.providers.deepseek", "DeepSeekProvider"),
-    }
-    for name, (env_keys, module, cls_name) in optional.items():
-        if isinstance(env_keys, str):
-            env_keys = (env_keys,)
-        if not any(os.environ.get(k) for k in env_keys):
-            continue
-        try:
-            import importlib
+    ollama_url = (getattr(cfg, "OLLAMA_BASE_URL", None) or os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434")
+    providers = {"ollama": OllamaProvider(base_url=ollama_url)}
 
-            providers[name] = getattr(importlib.import_module(module), cls_name)()
+    def _get_val(k: str) -> Optional[str]:
+        return (getattr(cfg, k, None) or os.environ.get(k) or "").strip() or None
+
+    # Groq
+    groq_key = _get_val("GROQ_API_KEY")
+    if groq_key:
+        try:
+            from praxis_ai_gateway.providers.groq import GroqProvider
+            providers["groq"] = GroqProvider(api_key=groq_key)
         except Exception as e:
-            logger.warning("provider_init_failed", extra={"provider": name, "error_type": type(e).__name__})
+            logger.warning("provider_init_failed", extra={"provider": "groq", "error_type": type(e).__name__})
+
+    # OpenAI / OpenRouter
+    openai_key = _get_val("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            from praxis_ai_gateway.providers.openai import OpenAIProvider
+            openai_url = _get_val("OPENAI_BASE_URL")
+            providers["openai"] = OpenAIProvider(api_key=openai_key, base_url=openai_url)
+        except Exception as e:
+            logger.warning("provider_init_failed", extra={"provider": "openai", "error_type": type(e).__name__})
+
+    # DeepSeek
+    deepseek_key = _get_val("DEEPSEEK_API_KEY")
+    if deepseek_key:
+        try:
+            from praxis_ai_gateway.providers.deepseek import DeepSeekProvider
+            deepseek_url = _get_val("DEEPSEEK_BASE_URL")
+            providers["deepseek"] = DeepSeekProvider(api_key=deepseek_key, base_url=deepseek_url)
+        except Exception as e:
+            logger.warning("provider_init_failed", extra={"provider": "deepseek", "error_type": type(e).__name__})
+
+    # Gemini
+    gemini_key = _get_val("GEMINI_API_KEY") or _get_val("GOOGLE_API_KEY")
+    if gemini_key:
+        try:
+            from praxis_ai_gateway.providers.gemini import GeminiProvider
+            providers["gemini"] = GeminiProvider(api_key=gemini_key)
+        except Exception as e:
+            logger.warning("provider_init_failed", extra={"provider": "gemini", "error_type": type(e).__name__})
+
+    # Anthropic
+    anthropic_key = _get_val("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        try:
+            from praxis_ai_gateway.providers.anthropic import AnthropicProvider
+            providers["anthropic"] = AnthropicProvider(api_key=anthropic_key)
+        except Exception as e:
+            logger.warning("provider_init_failed", extra={"provider": "anthropic", "error_type": type(e).__name__})
+
     return providers
 
 
@@ -71,7 +105,7 @@ def build_gateway(cfg: Settings, redis, session_factory=None, providers: Optiona
     registry = ModelRegistry(cfg.MODELS_CONFIG_PATH)
     return GatewayRouter(
         registry=registry,
-        providers=providers if providers is not None else build_providers(),
+        providers=providers if providers is not None else build_providers(cfg),
         redis=redis,
         db=None,
         session_factory=session_factory,

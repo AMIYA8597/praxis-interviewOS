@@ -50,6 +50,15 @@ class OpenAIProvider(LLMProvider):
             is_free_tier=False
         )
 
+    async def check_health(self) -> bool:
+        if not self.api_key:
+            return False
+        try:
+            resp = await self._client.get(f"{self.api_url}/models", timeout=3.0)
+            return resp.status_code == 200
+        except Exception:
+            return False
+
     def _handle_error(self, exc: Exception):
         if isinstance(exc, httpx.HTTPStatusError):
             if exc.response.status_code == 401:

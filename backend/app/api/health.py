@@ -98,15 +98,16 @@ async def providers_check(gateway = Depends(get_ai_gateway)):
     providers_status = {}
     from praxis_ai_gateway.resilience import CircuitBreaker
     
+    health_results = await gateway.check_provider_health() if hasattr(gateway, "check_provider_health") else {}
     for name, provider in gateway.providers.items():
         caps = provider.capabilities()
-        # Default capability check
         cb = CircuitBreaker(gateway.redis, gateway.db, name, "generate")
         state = await cb.get_state()
         
         providers_status[name] = {
             "capabilities": caps.model_dump(),
-            "circuit_breaker_state": state
+            "circuit_breaker_state": state,
+            "healthy": health_results.get(name, False),
         }
         
     return {"status": "ok", "providers": providers_status}

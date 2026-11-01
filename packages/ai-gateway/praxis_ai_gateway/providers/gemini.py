@@ -39,6 +39,15 @@ class GeminiProvider(LLMProvider):
             is_free_tier=True
         )
 
+    async def check_health(self) -> bool:
+        if not self.api_key:
+            return False
+        try:
+            resp = await self._client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={self.api_key}", timeout=3.0)
+            return resp.status_code == 200
+        except Exception:
+            return False
+
     def _handle_error(self, exc: Exception):
         if isinstance(exc, httpx.HTTPStatusError):
             if exc.response.status_code in [401, 403]:
