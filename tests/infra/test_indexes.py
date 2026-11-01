@@ -2,6 +2,9 @@
 
 
 
+import pytest
+
+
 def test_fk_indexes_exist(db_conn):
     cur = db_conn.cursor()
     
@@ -13,6 +16,9 @@ def test_fk_indexes_exist(db_conn):
 
 def test_vector_index_exists(db_conn):
     cur = db_conn.cursor()
+    cur.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector';")
+    if not cur.fetchone():
+        pytest.skip("pgvector extension not installed on this PostgreSQL instance")
     
     # We disable sequential scan to force the query planner to use an index if one exists
     cur.execute("SET enable_seqscan = off;")
