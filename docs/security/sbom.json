@@ -1,0 +1,524 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:praxis-sbom-1793531271",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-11-01T11:07:51.845179+00:00",
+    "component": {
+      "name": "praxis-interviewOS",
+      "version": "1.0.0",
+      "type": "application"
+    },
+    "summary": {
+      "python_dependencies_count": 18,
+      "javascript_dependencies_count": 59,
+      "total_components": 77
+    }
+  },
+  "components": [
+    {
+      "ecosystem": "PyPI",
+      "name": "fastapi",
+      "spec": "fastapi"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "uvicorn",
+      "spec": "uvicorn"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "arq",
+      "spec": "arq"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "pydantic",
+      "spec": "pydantic"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "pydantic-settings",
+      "spec": "pydantic-settings"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "psycopg2-binary",
+      "spec": "psycopg2-binary"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "asyncpg",
+      "spec": "asyncpg"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "redis",
+      "spec": "redis"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "PyJWT",
+      "spec": "PyJWT"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "cryptography",
+      "spec": "cryptography"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "httpx",
+      "spec": "httpx"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "python-multipart",
+      "spec": "python-multipart"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "opentelemetry-api",
+      "spec": "opentelemetry-api"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "opentelemetry-sdk",
+      "spec": "opentelemetry-sdk"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "opentelemetry-instrumentation-fastapi",
+      "spec": "opentelemetry-instrumentation-fastapi"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "numpy",
+      "spec": "numpy"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "praxis-config",
+      "spec": "praxis-config"
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "praxis-ai-gateway",
+      "spec": "praxis-ai-gateway"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@playwright/test",
+      "version": "^1.40.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@testing-library/jest-dom",
+      "version": "^7.0.1",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@testing-library/react",
+      "version": "^14.1.2",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/jest",
+      "version": "^29.5.11",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/node",
+      "version": "^20.10.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/react",
+      "version": "^19.0.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/react-dom",
+      "version": "^19.0.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript-eslint/eslint-plugin",
+      "version": "^6.13.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@typescript-eslint/parser",
+      "version": "^6.13.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@vitejs/plugin-react",
+      "version": "^6.1.1",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "electron",
+      "version": "^33.4.11",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "electron-vite",
+      "version": "^5.0.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "eslint",
+      "version": "^8.55.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "husky",
+      "version": "^9.1.7",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "jest",
+      "version": "^29.7.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "jest-environment-jsdom",
+      "version": "^29.7.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "playwright",
+      "version": "^1.40.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "ts-jest",
+      "version": "^29.1.1",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript",
+      "version": "^5.3.0",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "vite",
+      "version": "^8.2.2",
+      "scope": "devDependencies",
+      "manifest": "package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@praxis/types",
+      "version": "workspace:*",
+      "scope": "dependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@praxis/ui",
+      "version": "workspace:*",
+      "scope": "dependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@supabase/ssr",
+      "version": "^0.12.7",
+      "scope": "dependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@supabase/supabase-js",
+      "version": "^2.115.0",
+      "scope": "dependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lucide-react",
+      "version": "^1.42.0",
+      "scope": "dependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "next",
+      "version": "15.3.3",
+      "scope": "dependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "react",
+      "version": "^19.0.0",
+      "scope": "dependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "react-dom",
+      "version": "^19.0.0",
+      "scope": "dependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "zustand",
+      "version": "^5.0.15",
+      "scope": "dependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/node",
+      "version": "^20",
+      "scope": "devDependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/react",
+      "version": "^19",
+      "scope": "devDependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/react-dom",
+      "version": "^19",
+      "scope": "devDependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "eslint",
+      "version": "^8",
+      "scope": "devDependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "eslint-config-next",
+      "version": "15.3.3",
+      "scope": "devDependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "postcss",
+      "version": "^8",
+      "scope": "devDependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "tailwindcss",
+      "version": "^3.4.1",
+      "scope": "devDependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript",
+      "version": "^5",
+      "scope": "devDependencies",
+      "manifest": "apps\\web\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@praxis/types",
+      "version": "workspace:*",
+      "scope": "dependencies",
+      "manifest": "apps\\desktop\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@praxis/ui",
+      "version": "workspace:*",
+      "scope": "dependencies",
+      "manifest": "apps\\desktop\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@supabase/supabase-js",
+      "version": "^2.115.0",
+      "scope": "dependencies",
+      "manifest": "apps\\desktop\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "electron-is-dev",
+      "version": "^3.0.1",
+      "scope": "dependencies",
+      "manifest": "apps\\desktop\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/node",
+      "version": "^20.0.0",
+      "scope": "devDependencies",
+      "manifest": "apps\\desktop\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "electron",
+      "version": "^33.0.0",
+      "scope": "devDependencies",
+      "manifest": "apps\\desktop\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "react",
+      "version": "^18.3.1",
+      "scope": "devDependencies",
+      "manifest": "apps\\desktop\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "react-dom",
+      "version": "^18.3.1",
+      "scope": "devDependencies",
+      "manifest": "apps\\desktop\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript",
+      "version": "^5.0.0",
+      "scope": "devDependencies",
+      "manifest": "apps\\desktop\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@praxis/types",
+      "version": "workspace:*",
+      "scope": "dependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@storybook/addon-a11y",
+      "version": "^10.6.0",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@storybook/addon-docs",
+      "version": "^10.6.0",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@storybook/addon-essentials",
+      "version": "^8.6.14",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@storybook/react",
+      "version": "^10.6.0",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@storybook/react-vite",
+      "version": "^10.6.0",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@testing-library/react",
+      "version": "^14.1.2",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/jest",
+      "version": "^29.5.11",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "jest",
+      "version": "^29.7.0",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "jest-environment-jsdom",
+      "version": "^29.7.0",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "react",
+      "version": "18.3.1",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "react-dom",
+      "version": "18.3.1",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "storybook",
+      "version": "^10.6.0",
+      "scope": "devDependencies",
+      "manifest": "packages\\ui\\package.json"
+    }
+  ]
+}
