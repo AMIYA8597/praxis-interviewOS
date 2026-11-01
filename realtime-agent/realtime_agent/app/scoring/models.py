@@ -1,5 +1,20 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
+from enum import Enum
+
+class ClaimClassification(str, Enum):
+    SUPPORTED = "SUPPORTED"
+    PARTIALLY_SUPPORTED = "PARTIALLY_SUPPORTED"
+    UNSUPPORTED = "UNSUPPORTED"
+    CONTRADICTED = "CONTRADICTED"
+    UNCERTAIN = "UNCERTAIN"
+
+class ClaimGroundingResult(BaseModel):
+    classification: ClaimClassification
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    source_chunk_id: Optional[str] = None
+    source_excerpt: Optional[str] = None
+    reasoning: Optional[str] = None
 
 class StarCompleteness(BaseModel):
     situation: bool

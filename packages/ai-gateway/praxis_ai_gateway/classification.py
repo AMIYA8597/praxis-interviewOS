@@ -55,7 +55,18 @@ class FastClassifier:
     def __init__(self, router: GatewayRouter, redis_pool=None):
         self.router = router
         self.redis_pool = redis_pool
-        from packages.config.settings import PROJECT_ROOT
+        try:
+            from packages.config.settings import PROJECT_ROOT
+        except ImportError:
+            try:
+                from praxis_config.settings import PROJECT_ROOT
+            except ImportError:
+                import sys
+                from pathlib import Path
+                root = Path(__file__).resolve().parent.parent.parent.parent
+                if str(root) not in sys.path:
+                    sys.path.insert(0, str(root))
+                from packages.config.settings import PROJECT_ROOT
         with open(str(PROJECT_ROOT / "prompts/classification/domain_v1.md"), "r", encoding="utf-8") as f:
             self.prompt_template = f.read()
 

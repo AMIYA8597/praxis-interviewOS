@@ -1,0 +1,30 @@
+[
+  {
+    "id": "clean_technical",
+    "wav_path": "ai-evaluation/datasets/audio\\clean_technical.wav",
+    "reference_text": "In distributed systems, eventual consistency allows replicas to diverge temporarily before converging to the same state.",
+    "duration_s": 7.06,
+    "noise_snr_db": null
+  },
+  {
+    "id": "accented_english",
+    "wav_path": "ai-evaluation/datasets/audio\\accented_english.wav",
+    "reference_text": "We utilized a Redis cluster for low latency session caching and decoupled background jobs with message queues.",
+    "duration_s": 6.29,
+    "noise_snr_db": null
+  },
+  {
+    "id": "noisy_background",
+    "wav_path": "ai-evaluation/datasets/audio\\noisy_background.wav",
+    "reference_text": "The primary bottleneck was database connection pool exhaustion under high concurrency.",
+    "duration_s": 4.56,
+    "noise_snr_db": 15.0
+  },
+  {
+    "id": "fast_speech",
+    "wav_path": "ai-evaluation/datasets/audio\\fast_speech.wav",
+    "reference_text": "We scaled our microservices horizontally across multiple availability zones using Kubernetes and automatic pod autoscaling.",
+    "duration_s": 7.78,
+    "noise_snr_db": null
+  }
+]
