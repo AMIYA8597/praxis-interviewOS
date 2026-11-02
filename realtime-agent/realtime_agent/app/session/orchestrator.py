@@ -106,12 +106,18 @@ class SessionOrchestrator:
         self.degraded_components.add(component)
         if first:
             try:
+                err_code = getattr(error, "error_code", None) or type(error).__name__
+                err_msg = str(error) or f"{component} temporarily unavailable; continuing"
                 self.enqueue_event(
                     Envelope(
                         type="session.degraded",
                         session_id=self.session_id,
                         sequence=0,
-                        payload={"component": component, "message": f"{component} temporarily unavailable; continuing"},
+                        payload={
+                            "component": component,
+                            "error_code": err_code,
+                            "message": err_msg,
+                        },
                     ),
                     critical=True,
                 )

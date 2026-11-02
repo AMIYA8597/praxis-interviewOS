@@ -214,8 +214,7 @@ class InterviewSession:
             decision = call_result.result
         except Exception as e:
             logger.error(f"Policy generation failed: {e}")
-            # Fallback
-            decision = PolicyDecision(is_clarifying_follow_up=False, response_text="Could you elaborate a bit more on that?")
+            raise
             
         # If transitioning, increment idx
         if not decision.is_clarifying_follow_up and self.current_question_idx < len(self.prep_pack):

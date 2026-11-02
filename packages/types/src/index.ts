@@ -122,7 +122,9 @@ export type RealtimeServerEventType =
   | 'transcript.final'
   | 'coaching.metrics'
   | 'interviewer.text'
-  | 'state.transitioned';
+  | 'state.transitioned'
+  | 'session.degraded'
+  | 'session.error';
 
 export type RealtimeEventType = RealtimeClientEventType | RealtimeServerEventType;
 

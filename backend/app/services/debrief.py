@@ -77,7 +77,11 @@ async def generate_session_debrief(session_id: str, db: AsyncSession, gateway: G
         return {
             "session_id": session_id,
             "summary": " ".join(summary_parts),
-            "headline_metrics": debrief.headline_metrics.model_dump(),
+            "headline_metrics": {
+                "average_wpm": round(avg_wpm),
+                "average_filler_rate": total_fillers,
+                "average_score": round(avg_relevance, 1),
+            },
             "strengths": debrief.strengths,
             "weaknesses": debrief.weaknesses,
             "flagged_claims": debrief.flagged_claims,

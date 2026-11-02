@@ -202,7 +202,14 @@ async def generate_debrief_from_aggregated(
             messages=[m.model_dump(exclude_none=True) for m in builder.build()],
             schema=SessionDebrief,
         )
-        return call_result.result
+        debrief = call_result.result
+        if "averages" in aggregated:
+            debrief.headline_metrics = HeadlineMetrics(
+                average_wpm=float(aggregated["averages"].get("wpm") or 0.0),
+                average_filler_rate=float(aggregated["averages"].get("filler_rate") or 0.0),
+                average_score=float(aggregated["averages"].get("overall_score") or 0.0),
+            )
+        return debrief
     except Exception as e:
         logger.error(f"Failed to generate debrief: {e}")
         return SessionDebrief(
