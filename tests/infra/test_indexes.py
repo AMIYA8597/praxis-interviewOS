@@ -7,6 +7,7 @@ import pytest
 
 def test_fk_indexes_exist(db_conn):
     cur = db_conn.cursor()
+    cur.execute("SET enable_seqscan = off;")
     
     # Run EXPLAIN on candidate_projects filtering by candidate_id
     cur.execute("EXPLAIN SELECT * FROM candidate_projects WHERE candidate_id = '00000000-0000-0000-0000-000000000000';")

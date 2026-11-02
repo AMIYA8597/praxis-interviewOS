@@ -11,7 +11,9 @@ export async function middleware(request: NextRequest) {
   response.headers.set("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
   response.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https: wss: ws:; media-src 'self' blob:; frame-ancestors 'none';"
+    process.env.NODE_ENV === "production"
+      ? "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https: wss: ws:; media-src 'self' blob:; frame-ancestors 'none';"
+      : "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https: wss: ws:; media-src 'self' blob:; frame-ancestors 'none';"
   );
 
   if (process.env.NODE_ENV === "production") {

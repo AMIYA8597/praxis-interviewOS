@@ -50,7 +50,8 @@ class GeminiProvider(LLMProvider):
 
     def _handle_error(self, exc: Exception):
         if isinstance(exc, httpx.HTTPStatusError):
-            if exc.response.status_code in [401, 403]:
+            body_text = exc.response.text.lower() if exc.response is not None else ""
+            if exc.response.status_code in [401, 403] or (exc.response.status_code == 400 and ("api key" in body_text or "api_key_invalid" in body_text)):
                 raise ProviderAuthError("Gemini auth error") from exc
             elif exc.response.status_code == 429:
                 retry_after = exc.response.headers.get("Retry-After")
@@ -154,7 +155,14 @@ class GeminiProvider(LLMProvider):
             resp = await self._client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if text.startswith("```"):
+                lines = text.splitlines()
+                if lines and lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                text = "\n".join(lines).strip()
             return schema.model_validate_json(text)
         except Exception as e:
             self._handle_error(e)

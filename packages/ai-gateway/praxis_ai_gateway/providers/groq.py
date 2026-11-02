@@ -124,16 +124,33 @@ class GroqProvider(LLMProvider):
         return await with_cancellation(self._structured(messages, schema, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _structured(self, messages: list[LLMMessage], schema: type[BaseModel], cancellation_token: Any = None, **kw) -> BaseModel:
+        formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
+        has_json = any("json" in m["content"].lower() for m in formatted_messages)
+        schema_json = json.dumps(schema.model_json_schema())
+        if not has_json:
+            instruction = f"\n\nPlease respond in valid JSON conforming to this schema:\n{schema_json}"
+            if formatted_messages and formatted_messages[-1]["role"] == "user":
+                formatted_messages[-1]["content"] += instruction
+            else:
+                formatted_messages.append({"role": "system", "content": f"Respond in valid JSON conforming to this schema:\n{schema_json}"})
         payload = {
             "model": kw.get("model", "llama-3.1-8b-instant"),
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "messages": formatted_messages,
             "response_format": {"type": "json_object"}
         }
         try:
             resp = await self._client.post(self.api_url, json=payload)
             resp.raise_for_status()
             data = resp.json()
-            return schema.model_validate_json(data["choices"][0]["message"]["content"])
+            raw_text = data["choices"][0]["message"]["content"].strip()
+            if raw_text.startswith("```"):
+                lines = raw_text.splitlines()
+                if lines and lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                raw_text = "\n".join(lines).strip()
+            return schema.model_validate_json(raw_text)
         except Exception as e:
             self._handle_error(e)
 

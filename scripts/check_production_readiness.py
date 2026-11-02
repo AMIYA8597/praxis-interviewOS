@@ -9,6 +9,8 @@ All checks are real — no fabricated pass results.
 import os
 import subprocess
 import sys
+from dotenv import load_dotenv
+load_dotenv()
 
 
 class Check:
