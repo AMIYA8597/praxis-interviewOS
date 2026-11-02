@@ -119,7 +119,7 @@ class GeminiProvider(LLMProvider):
             self._handle_error(e)
 
     async def stream(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> AsyncIterator[LLMDelta]:
-        model = kw.get("model", "gemini-1.5-flash")
+        model = kw.get("model") or os.environ.get("GEMINI_MODEL") or "gemini-1.5-flash"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={self.api_key}"
         
         payload = {"contents": self._format_messages(messages)}
@@ -141,7 +141,7 @@ class GeminiProvider(LLMProvider):
         return await with_cancellation(self._structured(messages, schema, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _structured(self, messages: list[LLMMessage], schema: type[BaseModel], cancellation_token: Any = None, **kw) -> BaseModel:
-        model = kw.get("model", "gemini-1.5-flash")
+        model = kw.get("model") or os.environ.get("GEMINI_MODEL") or "gemini-1.5-flash"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
         
         # In Gemini v1beta, response_mime_type="application/json" is supported.
