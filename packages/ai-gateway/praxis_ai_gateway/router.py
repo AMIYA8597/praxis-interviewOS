@@ -113,6 +113,7 @@ class GatewayRouter:
 
         # Non-streaming path
         failure_reasons = {}
+        failure_exceptions = {}
         last_provider = None
         for provider, config in candidates:
             model_id = config["model"]
@@ -146,6 +147,7 @@ class GatewayRouter:
             except Exception as e:
                 latency_ms = round((time.perf_counter() - started) * 1000, 1)
                 failure_reasons[provider.name] = str(e)
+                failure_exceptions[provider.name] = e
                 logger.warning("ai_call_failed", extra={
                     "task": task, "provider": provider.name, "model": model_id, "method": method_name,
                     "latency_ms": latency_ms, "error_type": type(e).__name__,
@@ -201,11 +203,21 @@ class GatewayRouter:
                 logger.warning("ai_usage_logging_failed", extra={"error_type": type(e).__name__})
             return RoutedCall(provider_name=provider.name, model=model_id, result=result)
 
+        from praxis_ai_gateway.errors import ProviderAuthError, ProviderRateLimitError, ProviderTimeoutError
+        attempted_exceptions = [getattr(exc, "__cause__", None) or exc for exc in failure_exceptions.values()]
+        if attempted_exceptions and all(isinstance(exc, ProviderAuthError) for exc in attempted_exceptions):
+            raise attempted_exceptions[0]
+        if attempted_exceptions and all(isinstance(exc, ProviderRateLimitError) for exc in attempted_exceptions):
+            raise attempted_exceptions[0]
+        if attempted_exceptions and all(isinstance(exc, ProviderTimeoutError) for exc in attempted_exceptions):
+            raise attempted_exceptions[0]
+
         err_msg = "All providers unavailable:\n" + "\n".join([f"- {p}: {r}" for p, r in failure_reasons.items()])
         raise AllProvidersUnavailableError(err_msg)
 
     async def _stream_with_fallback(self, task, candidates, context, args, kw, cancellation_token):
         failure_reasons = {}
+        failure_exceptions = {}
         last_provider = None
         
         for provider, config in candidates:
@@ -255,10 +267,20 @@ class GatewayRouter:
                 span.set_attribute("error", str(e))
                 span.end()
                 failure_reasons[provider.name] = str(e)
+                failure_exceptions[provider.name] = e
                 last_provider = provider.name
                 
                 # Fallback to next provider!
                 continue
+
+        from praxis_ai_gateway.errors import ProviderAuthError, ProviderRateLimitError, ProviderTimeoutError
+        attempted_exceptions = [getattr(exc, "__cause__", None) or exc for exc in failure_exceptions.values()]
+        if attempted_exceptions and all(isinstance(exc, ProviderAuthError) for exc in attempted_exceptions):
+            raise attempted_exceptions[0]
+        if attempted_exceptions and all(isinstance(exc, ProviderRateLimitError) for exc in attempted_exceptions):
+            raise attempted_exceptions[0]
+        if attempted_exceptions and all(isinstance(exc, ProviderTimeoutError) for exc in attempted_exceptions):
+            raise attempted_exceptions[0]
                 
         raise AllProvidersUnavailableError(f"All providers failed streaming: {failure_reasons}")
         

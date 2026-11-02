@@ -8,6 +8,9 @@ aliases:
     - provider: "groq"
       model: "llama-3.1-8b-instant"
       max_latency_ms: 1000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
+      max_latency_ms: 1500
     - provider: "openai"
       model: "gpt-4o-mini"
       max_latency_ms: 2000
@@ -23,6 +26,9 @@ aliases:
     - provider: "groq"
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
+      max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o-mini"
       max_latency_ms: 10000
@@ -34,6 +40,12 @@ aliases:
 
   # Deep reasoning and multi-dimensional scoring (debrief, system design, coding)
   deep_reasoning:
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
+      max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
       max_latency_ms: 10000
@@ -44,9 +56,6 @@ aliases:
       max_latency_ms: 10000
       cost_per_1k_input: 0.00300
       cost_per_1k_output: 0.01500
-    - provider: "groq"
-      model: "llama-3.3-70b-versatile"
-      max_latency_ms: 10000
     - provider: "ollama"
       model: "llama3.1:8b-instruct-q4_K_M"
       max_latency_ms: 30000
@@ -55,6 +64,9 @@ aliases:
   question_generation:
     - provider: "groq"
       model: "llama-3.3-70b-versatile"
+      max_latency_ms: 5000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
       max_latency_ms: 5000
     - provider: "openai"
       model: "gpt-4o-mini"
@@ -66,6 +78,12 @@ aliases:
       max_latency_ms: 25000
 
   answer_evaluation:
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
+      max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
       max_latency_ms: 10000
@@ -76,9 +94,6 @@ aliases:
       max_latency_ms: 10000
       cost_per_1k_input: 0.00300
       cost_per_1k_output: 0.01500
-    - provider: "groq"
-      model: "llama-3.3-70b-versatile"
-      max_latency_ms: 10000
     - provider: "ollama"
       model: "llama3.1:8b-instruct-q4_K_M"
       max_latency_ms: 30000
@@ -87,6 +102,9 @@ aliases:
     - provider: "groq"
       model: "llama-3.1-8b-instant"
       max_latency_ms: 2000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
+      max_latency_ms: 2500
     - provider: "openai"
       model: "gpt-4o-mini"
       max_latency_ms: 3000
@@ -100,6 +118,9 @@ aliases:
     - provider: "groq"
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 5000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
+      max_latency_ms: 5000
     - provider: "openai"
       model: "gpt-4o-mini"
       max_latency_ms: 5000
@@ -110,6 +131,12 @@ aliases:
       max_latency_ms: 25000
 
   debrief_generation:
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
+      max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
       max_latency_ms: 15000
@@ -120,9 +147,6 @@ aliases:
       max_latency_ms: 15000
       cost_per_1k_input: 0.00300
       cost_per_1k_output: 0.01500
-    - provider: "groq"
-      model: "llama-3.3-70b-versatile"
-      max_latency_ms: 10000
     - provider: "ollama"
       model: "llama3.1:8b-instruct-q4_K_M"
       max_latency_ms: 30000
@@ -130,6 +154,9 @@ aliases:
   study_plan_generation:
     - provider: "groq"
       model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
       max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o-mini"
@@ -141,27 +168,33 @@ aliases:
       max_latency_ms: 30000
 
   coding_evaluation:
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
+      max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
       max_latency_ms: 12000
       cost_per_1k_input: 0.00500
       cost_per_1k_output: 0.01500
-    - provider: "groq"
-      model: "llama-3.3-70b-versatile"
-      max_latency_ms: 10000
     - provider: "ollama"
       model: "llama3.1:8b-instruct-q4_K_M"
       max_latency_ms: 30000
 
   system_design_evaluation:
+    - provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      max_latency_ms: 10000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
+      max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
       max_latency_ms: 12000
       cost_per_1k_input: 0.00500
       cost_per_1k_output: 0.01500
-    - provider: "groq"
-      model: "llama-3.3-70b-versatile"
-      max_latency_ms: 10000
     - provider: "ollama"
       model: "llama3.1:8b-instruct-q4_K_M"
       max_latency_ms: 30000
@@ -169,6 +202,9 @@ aliases:
   behavioral_evaluation:
     - provider: "groq"
       model: "llama-3.3-70b-versatile"
+      max_latency_ms: 8000
+    - provider: "gemini"
+      model: "gemini-1.5-flash"
       max_latency_ms: 8000
     - provider: "openai"
       model: "gpt-4o-mini"

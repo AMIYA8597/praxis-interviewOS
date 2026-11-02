@@ -40,13 +40,20 @@ def configure_tracing(cfg: Settings, service: str) -> None:
 
 def build_providers(cfg: Optional[Settings] = None) -> dict:
     """Instantiate every provider whose prerequisites are configured."""
-    from praxis_ai_gateway.providers.ollama import OllamaProvider
-
-    ollama_url = (getattr(cfg, "OLLAMA_BASE_URL", None) or os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434")
-    providers = {"ollama": OllamaProvider(base_url=ollama_url)}
+    providers = {}
 
     def _get_val(k: str) -> Optional[str]:
         return (getattr(cfg, k, None) or os.environ.get(k) or "").strip() or None
+
+    # Ollama is registered only if explicitly enabled or configured as LLM_PROVIDER
+    ollama_enabled = os.environ.get("OLLAMA_ENABLED", "").lower() in ("true", "1") or _get_val("LLM_PROVIDER") == "ollama"
+    if ollama_enabled:
+        try:
+            from praxis_ai_gateway.providers.ollama import OllamaProvider
+            ollama_url = (getattr(cfg, "OLLAMA_BASE_URL", None) or os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434")
+            providers["ollama"] = OllamaProvider(base_url=ollama_url)
+        except Exception as e:
+            logger.warning("provider_init_failed", extra={"provider": "ollama", "error_type": type(e).__name__})
 
     # Groq
     groq_key = _get_val("GROQ_API_KEY")

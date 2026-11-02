@@ -288,6 +288,23 @@ export default function LiveSessionRoomPage() {
                 }
                 break;
 
+              case 'session.degraded':
+                setSessionState('DEGRADED');
+                if (payload.error_code === 'AI_PROVIDER_NOT_CONFIGURED') {
+                  setError('AI Provider Not Configured: Set GROQ_API_KEY or GEMINI_API_KEY in your local .env to enable live inference.');
+                } else if (payload.error_code === 'ProviderAuthError') {
+                  setError('AI Authentication Failed: Check provider API key credentials.');
+                } else if (payload.error_code === 'ProviderRateLimitError') {
+                  setError('AI Rate Limit Exceeded: Provider rate limit hit.');
+                } else if (payload.message) {
+                  setError(`Session Degraded: ${payload.message}`);
+                }
+                break;
+
+              case 'session.error':
+                setError(`Session Error: ${payload.message || payload.code || 'Operation failed'}`);
+                break;
+
               default:
                 break;
             }
