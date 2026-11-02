@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "InterviewOS",
+  title: "PRAXIS InterviewOS",
   description: "Realtime AI interview intelligence platform.",
 };
 

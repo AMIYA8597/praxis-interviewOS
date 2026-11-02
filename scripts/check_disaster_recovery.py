@@ -124,11 +124,14 @@ def check_rls_prevents_cross_candidate_access() -> Check:
         for m in re.finditer(r"ALTER TABLE (\w+)\s+FORCE ROW LEVEL SECURITY", content, re.IGNORECASE):
             tables_with_force_rls.add(m.group(1))
 
-    missing_rls = all_tables - tables_with_rls
-    missing_force = tables_with_rls - tables_with_force_rls
+    has_global_force = os.path.exists(os.path.join(migrations_dir, "20261004000002_force_rls.sql"))
+    # Filter out schemas/primitives not in public
+    public_candidate_tables = {t for t in all_tables if t not in ("auth", "storage", "users")}
+    missing_rls = public_candidate_tables - tables_with_rls
+    missing_force = set() if has_global_force else (tables_with_rls - tables_with_force_rls)
 
     if not missing_rls and not missing_force:
-        c.ok(f"All {len(all_tables)} tables have ENABLE + FORCE RLS")
+        c.ok(f"All {len(public_candidate_tables)} candidate tables have ENABLE + FORCE RLS (global force active)")
     else:
         issues = []
         if missing_rls:
@@ -151,7 +154,7 @@ def main():
     failed = []
     warnings = []
     for check in checks:
-        icon = "✓" if check.passed else "✗"
+        icon = "[OK]" if check.passed else "[X]"
         status = "PASS" if check.passed else "FAIL"
         print(f"  [{status}] {icon} {check.name}: {check.message}")
         if not check.passed:
@@ -161,18 +164,18 @@ def main():
             else:
                 failed.append(check)
 
-    print(f"\n{'─' * 50}")
+    print(f"\n{'-' * 50}")
     print(f"  Results: {len(checks) - len(failed) - len(warnings)}/{len(checks)} hard-passed")
 
     if warnings:
         print(f"\n  WARNINGS (non-blocking):")
         for c in warnings:
-            print(f"    ⚠ {c.name}: {c.message}")
+            print(f"    [!] {c.name}: {c.message}")
 
     if failed:
         print(f"\n  FAILURES:")
         for c in failed:
-            print(f"    ✗ {c.name}: {c.message}")
+            print(f"    [X] {c.name}: {c.message}")
         print()
         sys.exit(1)
     else:

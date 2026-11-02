@@ -52,8 +52,9 @@ export default function OnboardingPage() {
         <h1 className="text-2xl font-bold mb-6">Complete Profile</h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <div>
-            <label className="block mb-2 text-neutral-400">Full Name</label>
+            <label htmlFor="fullName" className="block mb-2 text-neutral-400">Full Name</label>
             <input
+              id="fullName"
               type="text"
               className="w-full p-2 bg-neutral-800 border border-neutral-700 rounded text-white"
               value={name}

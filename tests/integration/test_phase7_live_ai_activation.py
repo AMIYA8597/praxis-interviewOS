@@ -1,29 +1,22 @@
 import os
 import uuid
-import time
 import pytest
 import httpx
 import respx
 from unittest.mock import AsyncMock, MagicMock
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy import text
 
-from packages.config.settings import settings
-from praxis_ai_gateway.base import LLMMessage, LLMResponse
+from praxis_ai_gateway.base import LLMMessage
 from praxis_ai_gateway.registry import ModelRegistry
 from praxis_ai_gateway.router import GatewayRouter, RoutingContext
 from praxis_ai_gateway.errors import (
     AIProviderNotConfiguredError,
     ProviderAuthError,
     ProviderRateLimitError,
-    ProviderTimeoutError,
 )
 from praxis_ai_gateway.providers.groq import GroqProvider
 from praxis_ai_gateway.providers.gemini import GeminiProvider
-from backend.app.core.bootstrap import build_providers
-from realtime_agent.app.interview.policy import InterviewSession, PolicyDecision, Turn
-from realtime_agent.app.scoring.service import score_answer_async, calculate_grounding_score
-from realtime_agent.app.session.state_machine import StateMachine, SessionState
+from realtime_agent.app.interview.policy import InterviewSession, PolicyDecision
+from realtime_agent.app.scoring.service import score_answer_async
 from realtime_agent.app.audio.vad import VoiceActivityDetector
 from faster_whisper import WhisperModel
 from backend.app.services.debrief import generate_session_debrief
