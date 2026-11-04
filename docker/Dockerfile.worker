@@ -29,7 +29,7 @@ FROM deps AS source
 
 COPY packages/ packages/
 COPY backend/ backend/
-RUN pip install --no-cache-dir --no-deps packages/config packages/ai-gateway backend
+RUN pip install --no-cache-dir --no-deps ./packages/config ./packages/ai-gateway ./backend
 
 COPY prompts/ prompts/
 

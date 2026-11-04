@@ -37,7 +37,7 @@ FROM deps AS source
 COPY packages/ packages/
 COPY backend/ backend/
 COPY realtime-agent/ realtime-agent/
-RUN pip install --no-cache-dir --no-deps packages/config packages/ai-gateway backend realtime-agent
+RUN pip install --no-cache-dir --no-deps ./packages/config ./packages/ai-gateway ./backend ./realtime-agent
 
 COPY prompts/ prompts/
 # Pre-download models at build time so cold starts are fast.
