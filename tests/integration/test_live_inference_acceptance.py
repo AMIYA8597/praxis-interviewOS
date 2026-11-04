@@ -28,7 +28,9 @@ from praxis_ai_gateway.registry import ModelRegistry
 from praxis_ai_gateway.router import GatewayRouter, RoutingContext
 from praxis_ai_gateway.errors import (
     ProviderAuthError,
+    ProviderRateLimitError,
 )
+from praxis_ai_gateway.resilience import GatewayExhaustedError
 from praxis_ai_gateway.providers.groq import GroqProvider
 from praxis_ai_gateway.providers.gemini import GeminiProvider
 from realtime_agent.app.interview.policy import InterviewSession
@@ -110,12 +112,17 @@ async def test_live_question_generation(live_router):
         LLMMessage(role="system", content="You are an expert technical interviewer for distributed systems engineering."),
         LLMMessage(role="user", content="Generate a challenging question about Kafka consumer partition rebalancing strategies."),
     ]
-    call = await live_router.route(
-        task="question_generation",
-        context=ctx,
-        method_name="generate",
-        messages=messages,
-    )
+    try:
+        call = await live_router.route(
+            task="question_generation",
+            context=ctx,
+            method_name="generate",
+            messages=messages,
+        )
+    except (GatewayExhaustedError, ProviderRateLimitError) as e:
+        if any(w in str(e).lower() for w in ["rate limit", "quota", "exhausted", "429"]):
+            pytest.skip(f"Live provider daily quota or rate limit reached: {e}")
+        raise
     res = call.result
     assert res.text and len(res.text.strip()) > 30, "Generated question was empty or too short"
     assert call.provider_name in ("groq", "gemini"), f"Unexpected provider routed: {call.provider_name}"
@@ -143,13 +150,18 @@ async def test_live_structured_output(live_router):
             content="Evaluate this candidate response: 'We used sticky partition assignors to prevent rebalance storms.'",
         ),
     ]
-    call = await live_router.route(
-        task="answer_evaluation",
-        context=ctx,
-        method_name="structured",
-        messages=messages,
-        schema=LiveEvaluationSchema,
-    )
+    try:
+        call = await live_router.route(
+            task="answer_evaluation",
+            context=ctx,
+            method_name="structured",
+            messages=messages,
+            schema=LiveEvaluationSchema,
+        )
+    except (GatewayExhaustedError, ProviderRateLimitError) as e:
+        if any(w in str(e).lower() for w in ["rate limit", "quota", "exhausted", "429"]):
+            pytest.skip(f"Live provider daily quota or rate limit reached: {e}")
+        raise
     result = call.result
     assert isinstance(result, LiveEvaluationSchema)
     assert 0.0 <= result.clarity_score <= 1.0
@@ -179,6 +191,8 @@ async def test_live_answer_evaluation_rubric(live_router):
         gateway_router=live_router,
         routing_ctx=ctx,
     )
+    if score.measurement_status == "UNAVAILABLE" and any(w in (score.rationale or "").lower() for w in ["rate limit", "quota", "exhausted"]):
+        pytest.skip(f"Live provider daily quota or rate limit reached: {score.rationale}")
     assert score.overall is not None
     assert 0.5 <= score.overall <= 1.0
     assert score.measurement_status == "MEASURED"
@@ -206,12 +220,17 @@ async def test_live_contextual_follow_up(live_router):
     session.warm_up()
 
     ctx = RoutingContext(user_id="user_live_test", session_id="session_live_test", zero_spend_mode=True)
-    decision = await session.generate_next_turn(
-        candidate_answer="We adopted the Cooperative Sticky Assignor in Kafka to eliminate stop-the-world pauses.",
-        gateway_router=live_router,
-        routing_ctx=ctx,
-        is_follow_up=True,
-    )
+    try:
+        decision = await session.generate_next_turn(
+            candidate_answer="We adopted the Cooperative Sticky Assignor in Kafka to eliminate stop-the-world pauses.",
+            gateway_router=live_router,
+            routing_ctx=ctx,
+            is_follow_up=True,
+        )
+    except (GatewayExhaustedError, ProviderRateLimitError) as e:
+        if any(w in str(e).lower() for w in ["rate limit", "quota", "exhausted", "429"]):
+            pytest.skip(f"Live provider daily quota or rate limit reached: {e}")
+        raise
     assert decision.response_text and len(decision.response_text.strip()) > 20
     assert len(session.memory.turns) >= 2
 
