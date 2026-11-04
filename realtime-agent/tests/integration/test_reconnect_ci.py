@@ -33,7 +33,7 @@ def create_access_token(data: dict):
         "exp": now + 3600,
         **data,
     }
-    return jwt.encode(payload, "dummy_secret", algorithm="HS256")
+    return jwt.encode(payload, "dummy_secret_that_is_at_least_32b_long", algorithm="HS256")
 
 import fakeredis
 
@@ -64,8 +64,8 @@ async def realtime_server():
     os.environ["REDIS_URL"] = "redis://localhost:6379/0"
     from packages.config.settings import settings
     settings.DATABASE_URL = db_url
-    os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret"
-    settings.SUPABASE_JWT_SECRET = "dummy_secret"
+    os.environ["SUPABASE_JWT_SECRET"] = "dummy_secret_that_is_at_least_32b_long"
+    settings.SUPABASE_JWT_SECRET = "dummy_secret_that_is_at_least_32b_long"
 
     from realtime_agent.app.main import create_app
     app = create_app()

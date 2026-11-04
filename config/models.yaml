@@ -9,7 +9,7 @@ aliases:
       model: "llama-3.1-8b-instant"
       max_latency_ms: 1000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 1500
     - provider: "openai"
       model: "gpt-4o-mini"
@@ -27,7 +27,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o-mini"
@@ -44,7 +44,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
@@ -66,7 +66,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 5000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 5000
     - provider: "openai"
       model: "gpt-4o-mini"
@@ -82,7 +82,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
@@ -103,7 +103,7 @@ aliases:
       model: "llama-3.1-8b-instant"
       max_latency_ms: 2000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 2500
     - provider: "openai"
       model: "gpt-4o-mini"
@@ -119,7 +119,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 5000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 5000
     - provider: "openai"
       model: "gpt-4o-mini"
@@ -135,7 +135,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
@@ -156,7 +156,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o-mini"
@@ -172,7 +172,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
@@ -188,7 +188,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 10000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 10000
     - provider: "openai"
       model: "gpt-4o"
@@ -204,7 +204,7 @@ aliases:
       model: "llama-3.3-70b-versatile"
       max_latency_ms: 8000
     - provider: "gemini"
-      model: "gemini-1.5-flash"
+      model: "gemini-2.5-flash-lite"
       max_latency_ms: 8000
     - provider: "openai"
       model: "gpt-4o-mini"
