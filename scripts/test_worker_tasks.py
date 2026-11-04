@@ -1,3 +1,11 @@
+import os
+import sys
+
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+for p in [repo_root, os.path.join(repo_root, 'packages', 'ai-gateway'), os.path.join(repo_root, 'realtime-agent'), os.path.join(repo_root, 'backend')]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 import asyncio
 import uuid
 from sqlalchemy.ext.asyncio import create_async_engine
