@@ -14,7 +14,7 @@ import jwt
 
 
 def create_access_token(data: dict):
-    return jwt.encode(data, "dummy_secret", algorithm="HS256")
+    return jwt.encode(data, "dummy_secret_that_is_at_least_32b_long", algorithm="HS256")
 
 @pytest.fixture
 def patch_auth(monkeypatch):
