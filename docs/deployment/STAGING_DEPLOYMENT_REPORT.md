@@ -4,7 +4,7 @@
 **Audit Date:** 2026-11-04  
 **Auditor:** Antigravity Autonomous Engineering Agent  
 **Branch:** `release-candidate`  
-**HEAD Commit:** `ebc5eeb9758d75e8271c0e2bb668240a23f8e78d`  
+**HEAD Commit:** `486d976`  
 **Final Staging Verdict:** **`STAGING_ACCEPTED_WITH_DOCUMENTED_LIMITATIONS`**  
 
 ---
