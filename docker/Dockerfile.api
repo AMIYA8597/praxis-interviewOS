@@ -38,7 +38,7 @@ FROM deps AS source
 # Copy local packages and install without -e (non-editable) to prevent broken symlinks in /app.
 COPY packages/ packages/
 COPY backend/ backend/
-RUN pip install --no-cache-dir --no-deps packages/config packages/ai-gateway backend
+RUN pip install --no-cache-dir --no-deps ./packages/config ./packages/ai-gateway ./backend
 
 # Copy prompts used at runtime.
 COPY prompts/ prompts/

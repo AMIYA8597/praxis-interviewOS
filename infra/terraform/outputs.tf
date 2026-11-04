@@ -25,6 +25,7 @@ output "realtime_url" {
 output "redis_host" {
   description = "Private IP of Memorystore Redis instance"
   value       = module.gcp_infrastructure.redis_host
+  sensitive   = true
 }
 
 output "load_balancer_ip" {

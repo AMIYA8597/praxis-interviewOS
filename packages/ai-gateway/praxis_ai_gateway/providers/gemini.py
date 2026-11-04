@@ -43,7 +43,7 @@ class GeminiProvider(LLMProvider):
         if not self.api_key:
             return False
         try:
-            resp = await self._client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={self.api_key}", timeout=3.0)
+            resp = await self._client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={self.api_key}", timeout=10.0)
             return resp.status_code == 200
         except Exception:
             return False
@@ -77,7 +77,7 @@ class GeminiProvider(LLMProvider):
         return await with_cancellation(self._generate(messages, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _generate(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> LLMResponse:
-        model = kw.get("model") or os.environ.get("GEMINI_MODEL") or "gemini-1.5-flash"
+        model = os.environ.get("GEMINI_MODEL") or (kw.get("model") if kw.get("model") != "gemini-1.5-flash" else None) or "gemini-2.5-flash-lite"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
         
         start = time.perf_counter()
@@ -119,7 +119,7 @@ class GeminiProvider(LLMProvider):
             self._handle_error(e)
 
     async def stream(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> AsyncIterator[LLMDelta]:
-        model = kw.get("model", "gemini-1.5-flash")
+        model = os.environ.get("GEMINI_MODEL") or (kw.get("model") if kw.get("model") != "gemini-1.5-flash" else None) or "gemini-2.5-flash-lite"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={self.api_key}"
         
         payload = {"contents": self._format_messages(messages)}
@@ -141,12 +141,20 @@ class GeminiProvider(LLMProvider):
         return await with_cancellation(self._structured(messages, schema, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _structured(self, messages: list[LLMMessage], schema: type[BaseModel], cancellation_token: Any = None, **kw) -> BaseModel:
-        model = kw.get("model", "gemini-1.5-flash")
+        model = os.environ.get("GEMINI_MODEL") or (kw.get("model") if kw.get("model") != "gemini-1.5-flash" else None) or "gemini-2.5-flash-lite"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
         
+        formatted_messages = list(messages)
+        schema_inst = f"\n\nOutput ONLY a JSON object that strictly conforms to this schema:\n{json.dumps(schema.model_json_schema())}"
+        if formatted_messages:
+            last_msg = formatted_messages[-1]
+            formatted_messages[-1] = LLMMessage(role=last_msg.role, content=last_msg.content + schema_inst)
+        else:
+            formatted_messages = [LLMMessage(role="user", content=schema_inst)]
+
         # In Gemini v1beta, response_mime_type="application/json" is supported.
         payload = {
-            "contents": self._format_messages(messages),
+            "contents": self._format_messages(formatted_messages),
             "generationConfig": {
                 "responseMimeType": "application/json"
             }
@@ -171,7 +179,7 @@ class GeminiProvider(LLMProvider):
         return await with_cancellation(self._embed(texts, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _embed(self, texts: list[str], cancellation_token: Any = None, **kw) -> list[list[float]]:
-        model = kw.get("model", "text-embedding-004")
+        model = kw.get("model", "gemini-embedding-001")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:batchEmbedContents?key={self.api_key}"
         
         requests = [{"model": f"models/{model}", "content": {"parts": [{"text": t}]}} for t in texts]

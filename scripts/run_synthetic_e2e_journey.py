@@ -13,6 +13,14 @@ Executes and verifies every step of the PRAXIS interview lifecycle:
 
 Measures and prints wall-clock latencies for all execution steps.
 """
+import os
+import sys
+
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+for p in [repo_root, os.path.join(repo_root, 'packages', 'ai-gateway'), os.path.join(repo_root, 'realtime-agent'), os.path.join(repo_root, 'backend')]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 import asyncio
 import time
 import uuid

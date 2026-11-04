@@ -6,7 +6,6 @@ sys.path.extend([".", "backend", "realtime-agent", "packages/ai-gateway"])
 from dotenv import load_dotenv
 load_dotenv()
 import psutil
-import torch
 import numpy as np
 from sqlalchemy import text
 from backend.app.db.session import _get_factory

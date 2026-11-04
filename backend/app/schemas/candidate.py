@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, List, Optional
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class CandidateResponse(BaseModel):
@@ -12,7 +12,12 @@ class CandidateResponse(BaseModel):
     headline: Optional[str] = None
     location: Optional[str] = None
     years_experience: Optional[float] = None
-    target_roles: List[str] = Field(default_factory=list)
+    target_roles: Optional[List[str]] = Field(default_factory=list)
+
+    @field_validator("target_roles", mode="before")
+    @classmethod
+    def _coerce_none_to_list(cls, v):
+        return v if v is not None else []
     preferred_language: Optional[str] = None
     # jsonb in the DB: may be a string label or a structured object.
     speaking_style: Optional[Any] = None

@@ -123,6 +123,8 @@ build/
 # ------------------------------------------------------------
 release/
 **/release/
+!docs/release/
+!docs/release/**
 
 *.asar
 *.asar.unpacked/

@@ -26,7 +26,7 @@ from realtime_agent.app.main import app
 
 
 def create_access_token(sub: str) -> str:
-    return jwt.encode({"sub": sub}, "dummy_secret", algorithm="HS256")
+    return jwt.encode({"sub": sub}, "dummy_secret_that_is_at_least_32b_long", algorithm="HS256")
 
 
 def _recv_text(ws, max_skips: int = 20) -> str:

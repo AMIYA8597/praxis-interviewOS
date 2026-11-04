@@ -12,7 +12,7 @@ async def test_forged_jwt_never_sets_rls_claims(monkeypatch):
     sets request.jwt.claims.
     """
     # Create fake request with an unverified forged token
-    forged_token = jwt.encode({"sub": "victim-user-id-1234"}, "wrong-secret", algorithm="HS256")
+    forged_token = jwt.encode({"sub": "victim-user-id-1234"}, "wrong-secret-that-is-at-least-32b", algorithm="HS256")
     
     request = MagicMock()
     request.headers = {"Authorization": f"Bearer {forged_token}"}
