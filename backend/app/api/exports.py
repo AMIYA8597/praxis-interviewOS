@@ -67,13 +67,14 @@ async def initiate_export(
             detail="An export is already in progress. Please wait for it to complete.",
         )
 
+    export_uuid = uuid.uuid4()
     row = await db.execute(
         text("""
-            INSERT INTO candidate_data_exports (candidate_id, status)
-            VALUES (:cid, 'pending')
+            INSERT INTO candidate_data_exports (id, candidate_id, status)
+            VALUES (:id, :cid, 'pending')
             RETURNING id, requested_at
         """),
-        {"cid": candidate["id"]},
+        {"id": str(export_uuid), "cid": candidate["id"]},
     )
     await db.commit()
     record = row.mappings().first()
