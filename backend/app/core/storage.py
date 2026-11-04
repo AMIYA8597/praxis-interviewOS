@@ -46,7 +46,12 @@ def _legacy_uri_to_key(key: str) -> str:
 class LocalFileStorage:
     def __init__(self, base_dir: str = "./storage"):
         self.base_dir = Path(base_dir).resolve()
-        self.base_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.base_dir.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            import tempfile
+            self.base_dir = Path(tempfile.gettempdir()) / "praxis_storage"
+            self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def _path(self, key: str) -> Path:
         key = _legacy_uri_to_key(key)

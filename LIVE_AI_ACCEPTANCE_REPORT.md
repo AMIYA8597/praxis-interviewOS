@@ -2,7 +2,7 @@
 
 **Audit Date:** 2026-11-04  
 **Audit Scope:** Live AI Gateway orchestration, multi-provider routing, live model inference, timeout propagation, structured JSON extraction, rubric scoring, and local AI fallbacks.  
-**Tested Provider:** Google Gemini (`gemini-2.5-flash-lite`, `gemini-embedding-001`)  
+**Tested Provider:** Google Gemini (`gemini-3.1-flash-lite`, `gemini-2.5-flash-lite`, `gemini-embedding-001`)  
 **Secondary Cloud Providers:** Groq (`llama-3.3-70b-versatile`), OpenAI (`gpt-4o-mini`), Anthropic (`claude-3-5-sonnet`)  
 **Local-First AI Models:** Faster-Whisper (`base.en` / `small.en`), Silero VAD (`v5.1.2`), BAAI (`bge-small-en-v1.5`)  
 **Overall Status:** **`VERIFIED_PASSING`**

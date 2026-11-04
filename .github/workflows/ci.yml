@@ -302,7 +302,11 @@ jobs:
           fi
           sleep 1
         done
-        curl -fsS http://localhost:8000/health/live
+        if ! curl -fsS http://localhost:8000/health/live; then
+          echo "praxis-api failed healthcheck; container logs:"
+          docker logs ci-api
+          exit 1
+        fi
         docker stop ci-api && docker rm ci-api
 
     - name: Run and healthcheck praxis-realtime
@@ -319,7 +323,11 @@ jobs:
           fi
           sleep 1
         done
-        curl -fsS http://localhost:8080/health/live
+        if ! curl -fsS http://localhost:8080/health/live; then
+          echo "praxis-realtime failed healthcheck; container logs:"
+          docker logs ci-realtime
+          exit 1
+        fi
         docker stop ci-realtime && docker rm ci-realtime
 
     - name: Run and verify praxis-worker stays up 30s

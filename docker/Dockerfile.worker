@@ -53,6 +53,8 @@ COPY --from=source /build/packages /app/packages
 COPY --from=source /build/backend /app/backend
 COPY --from=source /build/prompts /app/prompts
 
+RUN mkdir -p /app/storage && chown -R praxis:praxis /app
+
 ENV PATH="/venv/bin:$PATH" \
     PYTHONPATH="/app:$PYTHONPATH" \
     PYTHONUNBUFFERED=1 \
