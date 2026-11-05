@@ -195,6 +195,7 @@ storage/
 *.flac
 *.ogg
 *.webm
+!ai-evaluation/datasets/audio/*.wav
 
 
 # ------------------------------------------------------------

@@ -86,5 +86,4 @@ CMD ["sh", "-c", "uvicorn backend.app.main:app \
     --port ${PORT} \
     --workers 1 \
     --timeout-graceful-shutdown 30 \
-    --log-config /dev/null \
     --no-access-log"]

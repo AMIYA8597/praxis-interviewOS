@@ -73,11 +73,17 @@ class GeminiProvider(LLMProvider):
             contents.append({"role": role, "parts": [{"text": m.content}]})
         return contents
 
+    def _resolve_model(self, kw: dict) -> str:
+        requested = kw.get("model")
+        if requested in ("gemini-1.5-flash", "gemini-2.5-flash-lite"):
+            requested = None
+        return os.environ.get("GEMINI_MODEL") or requested or "gemini-3.1-flash-lite"
+
     async def generate(self, messages, cancellation_token=None, **kw):
         return await with_cancellation(self._generate(messages, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _generate(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> LLMResponse:
-        model = os.environ.get("GEMINI_MODEL") or (kw.get("model") if kw.get("model") != "gemini-1.5-flash" else None) or "gemini-2.5-flash-lite"
+        model = self._resolve_model(kw)
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
         
         start = time.perf_counter()
@@ -119,7 +125,7 @@ class GeminiProvider(LLMProvider):
             self._handle_error(e)
 
     async def stream(self, messages: list[LLMMessage], cancellation_token: Any = None, **kw) -> AsyncIterator[LLMDelta]:
-        model = os.environ.get("GEMINI_MODEL") or (kw.get("model") if kw.get("model") != "gemini-1.5-flash" else None) or "gemini-2.5-flash-lite"
+        model = self._resolve_model(kw)
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={self.api_key}"
         
         payload = {"contents": self._format_messages(messages)}
@@ -141,7 +147,7 @@ class GeminiProvider(LLMProvider):
         return await with_cancellation(self._structured(messages, schema, cancellation_token=cancellation_token, **kw), cancellation_token)
 
     async def _structured(self, messages: list[LLMMessage], schema: type[BaseModel], cancellation_token: Any = None, **kw) -> BaseModel:
-        model = os.environ.get("GEMINI_MODEL") or (kw.get("model") if kw.get("model") != "gemini-1.5-flash" else None) or "gemini-2.5-flash-lite"
+        model = self._resolve_model(kw)
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
         
         formatted_messages = list(messages)
