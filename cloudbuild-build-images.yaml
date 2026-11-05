@@ -1,6 +1,6 @@
 substitutions:
   _REGISTRY: "asia-south1-docker.pkg.dev/tradebit-396406/praxis"
-  _IMAGE_TAG: "4480147"
+  _IMAGE_TAG: "73adab0"
 
 steps:
   # ── Build API image ────────────────────────────────────────────────────────
