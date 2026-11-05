@@ -68,7 +68,7 @@ COPY --from=source /build/realtime-agent /app/realtime-agent
 COPY --from=source /build/prompts /app/prompts
 
 # Copy pre-downloaded ML models with correct ownership so praxis user can read them.
-RUN mkdir -p /app/.cache
+RUN mkdir -p /app/storage /app/.cache
 COPY --from=source --chown=praxis:praxis /root/.cache /app/.cache
 
 ENV PATH="/venv/bin:$PATH" \
