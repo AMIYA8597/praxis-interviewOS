@@ -12,6 +12,8 @@ if _raw_db_url.startswith("postgresql://") and "asyncpg" not in _raw_db_url:
 else:
     DATABASE_URL = _raw_db_url
 
+pytestmark = pytest.mark.skipif("sqlite" in _raw_db_url, reason="RLS isolation requires PostgreSQL")
+
 @pytest_asyncio.fixture(scope="function")
 async def db_session():
     engine = create_async_engine(DATABASE_URL, echo=False)
