@@ -26,6 +26,7 @@ class ObjectStorage(Protocol):
     async def put(self, key: str, data: bytes, content_type: str) -> str: ...
     async def get(self, key: str) -> bytes: ...
     async def delete(self, key: str) -> None: ...
+    async def sign_url(self, key: str, expiry_seconds: int = 3600) -> str: ...
 
 
 def validate_key(key: str) -> str:
@@ -91,6 +92,12 @@ class LocalFileStorage:
         except FileNotFoundError:
             pass
 
+    async def sign_url(self, key: str, expiry_seconds: int = 3600) -> str:
+        path = self._path(key)
+        if not path.exists():
+            raise StorageError("Object not found")
+        return f"file://{path}"
+
     # Backwards-compatible names used by older call sites.
     async def save(self, file_content: bytes, filename: str, path: str) -> str:
         return await self.put(f"{path.strip('/')}/{filename}", file_content)
@@ -135,6 +142,84 @@ class SupabaseStorage:
         if resp.status_code not in (200, 204, 404):
             raise StorageError(f"Supabase delete failed with status {resp.status_code}")
 
+    async def sign_url(self, key: str, expiry_seconds: int = 3600) -> str:
+        headers = {**self.headers}
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(
+                f"{self.base.rsplit('/object/', 1)[0]}/object/sign/{self.base.rsplit('/', 1)[-1]}/{quote(validate_key(key))}",
+                headers=headers,
+                json={"expiresIn": expiry_seconds},
+            )
+        if resp.status_code >= 300:
+            raise StorageError(f"Supabase sign_url failed with status {resp.status_code}")
+        data = resp.json()
+        signed_path = data.get("signedURL") or data.get("signedUrl", "")
+        base_url = self.base.rsplit("/storage/v1/", 1)[0]
+        return f"{base_url}{signed_path}" if signed_path.startswith("/") else signed_path
+
+    async def save(self, file_content: bytes, filename: str, path: str) -> str:
+        return await self.put(f"{path.strip('/')}/{filename}", file_content)
+
+    async def load(self, file_uri: str) -> bytes:
+        return await self.get(file_uri)
+
+
+class GCSStorage:
+    """Google Cloud Storage backend for production GCP deployments."""
+
+    def __init__(self, bucket_name: str, timeout: float = 30.0):
+        try:
+            from google.cloud import storage as gcs
+        except ImportError:
+            raise StorageError("google-cloud-storage is required for GCS backend")
+        self.client = gcs.Client()
+        self.bucket = self.client.bucket(bucket_name)
+        self.timeout = timeout
+
+    async def put(self, key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
+        safe_key = validate_key(key)
+
+        def _upload():
+            blob = self.bucket.blob(safe_key)
+            blob.upload_from_string(data, content_type=content_type, timeout=self.timeout)
+
+        await asyncio.to_thread(_upload)
+        return safe_key
+
+    async def get(self, key: str) -> bytes:
+        safe_key = validate_key(key)
+
+        def _download():
+            blob = self.bucket.blob(safe_key)
+            if not blob.exists():
+                raise StorageError("Object not found")
+            return blob.download_as_bytes(timeout=self.timeout)
+
+        return await asyncio.to_thread(_download)
+
+    async def delete(self, key: str) -> None:
+        safe_key = validate_key(key)
+
+        def _delete():
+            blob = self.bucket.blob(safe_key)
+            if blob.exists():
+                blob.delete(timeout=self.timeout)
+
+        await asyncio.to_thread(_delete)
+
+    async def sign_url(self, key: str, expiry_seconds: int = 3600) -> str:
+        import datetime
+        safe_key = validate_key(key)
+
+        def _sign():
+            blob = self.bucket.blob(safe_key)
+            return blob.generate_signed_url(
+                expiration=datetime.timedelta(seconds=expiry_seconds),
+                method="GET",
+            )
+
+        return await asyncio.to_thread(_sign)
+
     async def save(self, file_content: bytes, filename: str, path: str) -> str:
         return await self.put(f"{path.strip('/')}/{filename}", file_content)
 
@@ -145,6 +230,9 @@ class SupabaseStorage:
 def get_storage_client() -> ObjectStorage:
     from packages.config.settings import settings
 
-    if settings.STORAGE_BACKEND.lower() == "supabase":
+    backend = settings.STORAGE_BACKEND.lower()
+    if backend == "supabase":
         return SupabaseStorage(settings.SUPABASE_URL or "", settings.SUPABASE_SERVICE_ROLE_KEY or "", settings.STORAGE_BUCKET)
+    if backend == "gcs":
+        return GCSStorage(settings.STORAGE_BUCKET)
     return LocalFileStorage(settings.STORAGE_LOCAL_PATH)

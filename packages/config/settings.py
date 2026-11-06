@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     WORKER_JOB_TIMEOUT_S: int = Field(300, ge=1)
     WORKER_MAX_TRIES: int = Field(3, ge=1)
 
-    STORAGE_BACKEND: str = Field("local", description="local or supabase")
+    STORAGE_BACKEND: str = Field("local", description="local, supabase, or gcs")
     STORAGE_LOCAL_PATH: str = "./storage"
     STORAGE_BUCKET: str = "documents"
     MAX_UPLOAD_BYTES: int = Field(10 * 1024 * 1024, ge=1024)

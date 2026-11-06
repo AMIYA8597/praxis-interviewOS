@@ -30,10 +30,15 @@ async def real_db_engine():
 async def test_delete_candidate_account_job_status(real_db_engine):
     from backend.app.worker_tasks import delete_candidate_account_job
 
+    # This test requires a real PostgreSQL with Supabase auth schema (profiles, auth.users).
+    # Skip when running against SQLite (e.g. LOCAL_ONLY_MODE CI).
+    if "sqlite" in DATABASE_URL:
+        pytest.skip("Requires PostgreSQL with Supabase auth schema")
+
     profile_id = str(uuid.uuid4())
     candidate_id = str(uuid.uuid4())
     job_id = str(uuid.uuid4())
-    
+
     async with real_db_engine.begin() as conn:
         try:
             await conn.execute(text("INSERT INTO auth.users (id) VALUES (:pid)"), {"pid": profile_id})

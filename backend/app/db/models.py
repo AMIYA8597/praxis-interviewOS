@@ -754,3 +754,415 @@ class FeatureFlag(Base):
     scope_value = Column(Text)
     created_at = _created_at()
     updated_at = _updated_at()
+
+
+# ════════════════════════════════════════════════════════════════════
+# Interview taxonomy & question bank
+# ════════════════════════════════════════════════════════════════════
+
+class InterviewDomain(Base):
+    __tablename__ = "interview_domains"
+    id = _pk()
+    code = Column(Text, nullable=False, unique=True)
+    parent_code = Column(Text, ForeignKey("interview_domains.code"))
+    category = Column(Text, nullable=False)
+    label = Column(Text, nullable=False)
+    description = Column(Text)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = _created_at()
+
+
+class QuestionBank(Base):
+    __tablename__ = "question_bank"
+    id = _pk()
+    domain_code = Column(Text, ForeignKey("interview_domains.code"), nullable=False, index=True)
+    subcategory = Column(Text)
+    difficulty = Column(Text, nullable=False)
+    title = Column(Text, nullable=False)
+    body = Column(Text, nullable=False)
+    expected_concepts = Column(TextArray)
+    rubric = Column(Text)
+    follow_up_ids = Column(TextArray)
+    role_tags = Column(TextArray)
+    source = Column(Text, nullable=False, default="human")
+    quality_status = Column(Text, nullable=False, default="approved")
+    created_at = _created_at()
+    updated_at = _updated_at()
+
+
+class CandidateReadiness(Base):
+    __tablename__ = "candidate_readiness"
+    __table_args__ = (UniqueConstraint("candidate_id", "job_id"),)
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False)
+    job_id = Column(UUIDType, ForeignKey("jobs.id", ondelete="SET NULL"))
+    computed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    overall_score = Column(Numeric)
+    confidence = Column(Text)
+    technical_score = Column(Numeric)
+    system_design_score = Column(Numeric)
+    behavioral_score = Column(Numeric)
+    communication_score = Column(Numeric)
+    grounding_score = Column(Numeric)
+    jd_coverage_score = Column(Numeric)
+    weakest_domain = Column(Text)
+    recommended_action = Column(Text)
+    component_detail = Column(JSONType)
+
+
+class PreparationPlan(Base):
+    __tablename__ = "preparation_plans"
+    __table_args__ = (UniqueConstraint("candidate_id", "job_id"),)
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False)
+    job_id = Column(UUIDType, ForeignKey("jobs.id", ondelete="SET NULL"))
+    generated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    plan_sessions = Column(JSONType, nullable=False, default=list)
+    is_active = Column(Boolean, nullable=False, default=True)
+    completed_count = Column(Integer, nullable=False, default=0)
+
+
+# ════════════════════════════════════════════════════════════════════
+# Candidate memory & personalization
+# ════════════════════════════════════════════════════════════════════
+
+class CandidateTopicFact(Base):
+    __tablename__ = "candidate_topic_facts"
+    __table_args__ = (UniqueConstraint("candidate_id", "domain_code"),)
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True)
+    domain_code = Column(Text, ForeignKey("interview_domains.code"), nullable=False)
+    sessions_practiced = Column(Integer, nullable=False, default=0)
+    questions_answered = Column(Integer, nullable=False, default=0)
+    correct_count = Column(Integer, nullable=False, default=0)
+    weak_count = Column(Integer, nullable=False, default=0)
+    avg_correctness = Column(Numeric)
+    avg_grounding = Column(Numeric)
+    avg_structure = Column(Numeric)
+    last_practiced_at = Column(DateTime(timezone=True))
+    mastery_status = Column(Text, nullable=False, default="unknown")
+    mastery_updated_at = Column(DateTime(timezone=True))
+    sm2_interval_days = Column(Integer, nullable=False, default=1)
+    sm2_ease_factor = Column(Numeric, nullable=False, default=2.5)
+    sm2_repetitions = Column(Integer, nullable=False, default=0)
+    next_review_at = Column(DateTime(timezone=True))
+    created_at = _created_at()
+    updated_at = _updated_at()
+
+
+class CandidateInference(Base):
+    __tablename__ = "candidate_inferences"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True)
+    domain_code = Column(Text, ForeignKey("interview_domains.code"))
+    inference_type = Column(Text, nullable=False)
+    inference_text = Column(Text, nullable=False)
+    evidence_json = Column(JSONType, nullable=False, default=dict)
+    confidence = Column(Text, nullable=False, default="low")
+    generated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    invalidated_at = Column(DateTime(timezone=True))
+
+
+class CandidateCommunicationProfile(Base):
+    __tablename__ = "candidate_communication_profile"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, unique=True)
+    avg_wpm = Column(Numeric)
+    avg_filler_rate = Column(Numeric)
+    avg_pause_count = Column(Numeric)
+    avg_longest_pause_ms = Column(Numeric)
+    avg_answer_length_s = Column(Numeric)
+    avg_structure_score = Column(Numeric)
+    sessions_counted = Column(Integer, nullable=False, default=0)
+    top_fillers = Column(TextArray)
+    updated_at = _updated_at()
+
+
+class CandidateInterviewProfile(Base):
+    __tablename__ = "candidate_interview_profile"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, unique=True)
+    dsa_score = Column(Numeric)
+    backend_score = Column(Numeric)
+    databases_score = Column(Numeric)
+    distributed_score = Column(Numeric)
+    system_design_score = Column(Numeric)
+    behavioral_score = Column(Numeric)
+    communication_score = Column(Numeric)
+    grounding_score = Column(Numeric)
+    verified_claims_count = Column(Integer, nullable=False, default=0)
+    uncertain_claims_count = Column(Integer, nullable=False, default=0)
+    total_sessions = Column(Integer, nullable=False, default=0)
+    profile_version = Column(Integer, nullable=False, default=1)
+    computed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+# ════════════════════════════════════════════════════════════════════
+# Session analytics & adaptive difficulty
+# ════════════════════════════════════════════════════════════════════
+
+class SessionDifficultyState(Base):
+    __tablename__ = "session_difficulty_state"
+    id = _pk()
+    session_id = Column(UUIDType, ForeignKey("practice_sessions.id", ondelete="CASCADE"), nullable=False, unique=True)
+    current_level = Column(Numeric, nullable=False, default=0.5)
+    questions_asked = Column(Integer, nullable=False, default=0)
+    correct_streak = Column(Integer, nullable=False, default=0)
+    incorrect_streak = Column(Integer, nullable=False, default=0)
+    last_updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class SessionInterviewerConfig(Base):
+    __tablename__ = "session_interviewer_config"
+    id = _pk()
+    session_id = Column(UUIDType, ForeignKey("practice_sessions.id", ondelete="CASCADE"), nullable=False, unique=True)
+    personality = Column(Text, nullable=False, default="neutral")
+    description = Column(Text)
+    set_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class SessionPerformanceSnapshot(Base):
+    __tablename__ = "session_performance_snapshots"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(UUIDType, ForeignKey("practice_sessions.id", ondelete="CASCADE"), nullable=False, unique=True)
+    overall_score = Column(Numeric)
+    correctness = Column(Numeric)
+    structure = Column(Numeric)
+    grounding = Column(Numeric)
+    specificity = Column(Numeric)
+    conciseness = Column(Numeric)
+    avg_wpm = Column(Numeric)
+    filler_rate = Column(Numeric)
+    turns_count = Column(Integer, nullable=False, default=0)
+    snapped_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class CandidateWeakness(Base):
+    __tablename__ = "candidate_weaknesses"
+    __table_args__ = (UniqueConstraint("candidate_id", "weakness_type", "domain_code"),)
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False)
+    weakness_type = Column(Text, nullable=False)
+    domain_code = Column(Text, ForeignKey("interview_domains.code"))
+    description = Column(Text, nullable=False)
+    evidence_json = Column(JSONType, nullable=False, default=dict)
+    occurrence_count = Column(Integer, nullable=False, default=1)
+    severity = Column(Text, nullable=False, default="low")
+    first_observed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_observed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    resolved_at = Column(DateTime(timezone=True))
+
+
+class AnswerAttempt(Base):
+    __tablename__ = "answer_attempts"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(UUIDType, ForeignKey("question_bank.id"))
+    attempt_number = Column(Integer, nullable=False, default=1)
+    answer_text = Column(Text, nullable=False)
+    overall_score = Column(Numeric)
+    rationale = Column(Text)
+    answered_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class IdealAnswerFeedback(Base):
+    __tablename__ = "ideal_answer_feedback"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False)
+    question_id = Column(UUIDType, ForeignKey("question_bank.id"))
+    session_id = Column(UUIDType, ForeignKey("practice_sessions.id"))
+    turn_id = Column(UUIDType, ForeignKey("session_turns.id"))
+    what_was_correct = Column(Text)
+    what_was_missing = Column(Text)
+    what_was_stronger = Column(Text)
+    example_answer = Column(Text)
+    generated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+# ════════════════════════════════════════════════════════════════════
+# Interview engine state
+# ════════════════════════════════════════════════════════════════════
+
+class CodingSessionState(Base):
+    __tablename__ = "coding_session_state"
+    session_id = Column(UUIDType, ForeignKey("practice_sessions.id", ondelete="CASCADE"), primary_key=True)
+    language = Column(Text, nullable=False, default="python")
+    current_code = Column(Text, nullable=False, default="")
+    test_runs = Column(Integer, nullable=False, default=0)
+    tests_passed = Column(Integer, nullable=False, default=0)
+    tests_total = Column(Integer, nullable=False, default=0)
+    last_run_at = Column(DateTime(timezone=True))
+
+
+class CodingTestRunResult(Base):
+    __tablename__ = "coding_test_run_results"
+    __table_args__ = (UniqueConstraint("session_id", "run_number"),)
+    id = _pk()
+    session_id = Column(UUIDType, ForeignKey("practice_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    run_number = Column(Integer, nullable=False)
+    code_snapshot = Column(Text, nullable=False)
+    stdout = Column(Text, nullable=False, default="")
+    stderr = Column(Text, nullable=False, default="")
+    tests_passed = Column(Integer, nullable=False, default=0)
+    tests_failed = Column(Integer, nullable=False, default=0)
+    runtime_ms = Column(Integer, nullable=False, default=0)
+    verdict = Column(Text, nullable=False)
+    ran_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class SystemDesignSessionState(Base):
+    __tablename__ = "system_design_session_state"
+    session_id = Column(UUIDType, ForeignKey("practice_sessions.id", ondelete="CASCADE"), primary_key=True)
+    current_phase = Column(Text, nullable=False, default="requirements_gathering")
+    phases_completed = Column(TextArray, nullable=False, default=list)
+    challenge_count = Column(Integer, nullable=False, default=0)
+    last_updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+# ════════════════════════════════════════════════════════════════════
+# JD preparation & evidence
+# ════════════════════════════════════════════════════════════════════
+
+class JdRequirementGraph(Base):
+    __tablename__ = "jd_requirement_graph"
+    id = _pk()
+    job_id = Column(UUIDType, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    requirement_text = Column(Text, nullable=False)
+    domain_code = Column(Text, ForeignKey("interview_domains.code"))
+    importance = Column(Text, nullable=False, default="required")
+    created_at = _created_at()
+
+
+class CandidateJdEvidence(Base):
+    __tablename__ = "candidate_jd_evidence"
+    __table_args__ = (UniqueConstraint("candidate_id", "requirement_id"),)
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True)
+    requirement_id = Column(UUIDType, ForeignKey("jd_requirement_graph.id", ondelete="CASCADE"), nullable=False, index=True)
+    evidence_type = Column(Text, nullable=False, default="session_score")
+    score = Column(Numeric)
+    covered = Column(Boolean, nullable=False, default=False)
+    last_updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+# ════════════════════════════════════════════════════════════════════
+# Provider observability
+# ════════════════════════════════════════════════════════════════════
+
+class AiProviderCallLog(Base):
+    __tablename__ = "ai_provider_call_log"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="SET NULL"))
+    session_id = Column(UUIDType, ForeignKey("practice_sessions.id", ondelete="SET NULL"), index=True)
+    alias = Column(Text, nullable=False)
+    provider = Column(Text, nullable=False)
+    model = Column(Text, nullable=False)
+    mode = Column(Text)
+    latency_ms = Column(Integer)
+    input_tokens = Column(Integer)
+    output_tokens = Column(Integer)
+    cost_usd = Column(Numeric)
+    ai_mode = Column(Text, nullable=False, default="real")
+    success = Column(Boolean, nullable=False, default=True)
+    error_type = Column(Text)
+    called_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+# ════════════════════════════════════════════════════════════════════
+# Data exports (GDPR/CCPA)
+# ════════════════════════════════════════════════════════════════════
+
+class CandidateDataExport(Base):
+    __tablename__ = "candidate_data_exports"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(Text, nullable=False, default="pending")
+    requested_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+    expires_at = Column(DateTime(timezone=True))
+    download_url = Column(Text)
+    error_message = Column(Text)
+    object_key = Column(Text)
+
+
+# ════════════════════════════════════════════════════════════════════
+# Remaining core-schema tables not yet in ORM
+# ════════════════════════════════════════════════════════════════════
+
+class CandidateEducation(Base):
+    __tablename__ = "candidate_education"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True)
+    institution = Column(Text, nullable=False)
+    degree = Column(Text)
+    field_of_study = Column(Text)
+    start_date = Column(Date)
+    end_date = Column(Date)
+    gpa = Column(Numeric)
+    created_at = _created_at()
+    updated_at = _updated_at()
+
+
+class CandidateCertification(Base):
+    __tablename__ = "candidate_certifications"
+    id = _pk()
+    candidate_id = Column(UUIDType, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(Text, nullable=False)
+    issuer = Column(Text)
+    issue_date = Column(Date)
+    expiry_date = Column(Date)
+    credential_id = Column(Text)
+    credential_url = Column(Text)
+    created_at = _created_at()
+    updated_at = _updated_at()
+
+
+class ProviderConfig(Base):
+    __tablename__ = "provider_configs"
+    id = _pk()
+    profile_id = Column(UUIDType, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(Text, nullable=False)
+    api_key_encrypted = Column(Text)
+    created_at = _created_at()
+    updated_at = _updated_at()
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = _pk()
+    profile_id = Column(UUIDType, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    type = Column(Text, nullable=False)
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, nullable=False, default=False)
+    created_at = _created_at()
+    updated_at = _updated_at()
+
+
+class Shortcut(Base):
+    __tablename__ = "shortcuts"
+    id = _pk()
+    profile_id = Column(UUIDType, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    action_name = Column(Text, nullable=False)
+    keys = Column(TextArray, nullable=False)
+    created_at = _created_at()
+    updated_at = _updated_at()
+
+
+class WorkerIdempotencyLog(Base):
+    __tablename__ = "worker_idempotency_log"
+    idempotency_key = Column(Text, primary_key=True)
+    job_type = Column(Text, nullable=False)
+    status = Column(Text, nullable=False)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at = Column(DateTime(timezone=True))
+    error = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MigrationStatus(Base):
+    __tablename__ = "migration_status"
+    id = _pk()
+    migration_name = Column(Text, nullable=False)
+    applied_at = Column(DateTime(timezone=True), server_default=func.now())
+    checksum = Column(Text)
