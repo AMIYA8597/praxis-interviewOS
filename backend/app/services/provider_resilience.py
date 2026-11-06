@@ -9,14 +9,99 @@ Phase 76 — Cost & Latency Intelligence.
 Real tracking: provider/model/latency/tokens/cost per call.
 No fabricated metrics — only real call data.
 """
+import asyncio
 import logging
+import time
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+
+class CircuitState(str, Enum):
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class CircuitBreaker:
+    """Per-provider circuit breaker with open/half-open/closed states."""
+
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout_s: float = 60.0,
+        half_open_max_calls: int = 2,
+        success_threshold: int = 2,
+    ):
+        self._failure_threshold = failure_threshold
+        self._recovery_timeout_s = recovery_timeout_s
+        self._half_open_max_calls = half_open_max_calls
+        self._success_threshold = success_threshold
+        self._lock = asyncio.Lock()
+        self._providers: dict[str, dict] = {}
+
+    def _get_state(self, provider: str) -> dict:
+        if provider not in self._providers:
+            self._providers[provider] = {
+                "state": CircuitState.CLOSED,
+                "failures": 0,
+                "successes": 0,
+                "last_failure_time": 0.0,
+                "half_open_calls": 0,
+            }
+        return self._providers[provider]
+
+    async def can_call(self, provider: str) -> bool:
+        async with self._lock:
+            s = self._get_state(provider)
+            if s["state"] == CircuitState.CLOSED:
+                return True
+            if s["state"] == CircuitState.OPEN:
+                if time.monotonic() - s["last_failure_time"] >= self._recovery_timeout_s:
+                    s["state"] = CircuitState.HALF_OPEN
+                    s["half_open_calls"] = 0
+                    s["successes"] = 0
+                    logger.info("Circuit breaker for %s: OPEN -> HALF_OPEN", provider)
+                    return True
+                return False
+            # HALF_OPEN
+            return s["half_open_calls"] < self._half_open_max_calls
+
+    async def record_success(self, provider: str) -> None:
+        async with self._lock:
+            s = self._get_state(provider)
+            if s["state"] == CircuitState.HALF_OPEN:
+                s["successes"] += 1
+                if s["successes"] >= self._success_threshold:
+                    s["state"] = CircuitState.CLOSED
+                    s["failures"] = 0
+                    logger.info("Circuit breaker for %s: HALF_OPEN -> CLOSED", provider)
+            elif s["state"] == CircuitState.CLOSED:
+                s["failures"] = max(0, s["failures"] - 1)
+
+    async def record_failure(self, provider: str) -> None:
+        async with self._lock:
+            s = self._get_state(provider)
+            s["failures"] += 1
+            s["last_failure_time"] = time.monotonic()
+            if s["state"] == CircuitState.HALF_OPEN:
+                s["state"] = CircuitState.OPEN
+                logger.warning("Circuit breaker for %s: HALF_OPEN -> OPEN", provider)
+            elif s["state"] == CircuitState.CLOSED and s["failures"] >= self._failure_threshold:
+                s["state"] = CircuitState.OPEN
+                logger.warning("Circuit breaker for %s: CLOSED -> OPEN (failures=%d)", provider, s["failures"])
+
+    async def get_all_states(self) -> dict[str, str]:
+        async with self._lock:
+            return {p: s["state"].value for p, s in self._providers.items()}
+
+
+circuit_breaker = CircuitBreaker()
 
 # Approximate cost per 1K tokens (USD) — updated manually as pricing changes
 _COST_PER_1K_TOKENS: dict[str, dict[str, float]] = {
@@ -67,6 +152,11 @@ async def log_provider_call(
     candidate_id: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> None:
+    if success:
+        await circuit_breaker.record_success(provider)
+    else:
+        await circuit_breaker.record_failure(provider)
+
     cost = estimate_cost_usd(provider, model, input_tokens, output_tokens)
     try:
         await db.execute(text("""
@@ -177,5 +267,9 @@ async def get_provider_health(db: AsyncSession) -> dict:
             "avg_latency_ms": round(avg_lat, 0) if avg_lat else None,
             "sample_size": total,
         }
+
+    cb_states = await circuit_breaker.get_all_states()
+    for provider_name, info in health.items():
+        info["circuit_breaker"] = cb_states.get(provider_name, "closed")
 
     return {"providers": health}

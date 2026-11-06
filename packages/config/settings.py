@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str = Field("local", description="local, supabase, or gcs")
     STORAGE_LOCAL_PATH: str = "./storage"
     STORAGE_BUCKET: str = "documents"
+    GCS_PROJECT_ID: Optional[str] = Field(None, description="GCP project ID for GCS signed URLs")
     MAX_UPLOAD_BYTES: int = Field(10 * 1024 * 1024, ge=1024)
 
     MODELS_CONFIG_PATH: str = str(PROJECT_ROOT / "config/models.yaml")
@@ -210,7 +211,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_storage_backend(self) -> "Settings":
-        if self.STORAGE_BACKEND.lower() == "supabase":
+        backend = self.STORAGE_BACKEND.lower()
+        if backend == "supabase":
             missing = []
             if not self.SUPABASE_URL:
                 missing.append("SUPABASE_URL")
@@ -221,6 +223,10 @@ class Settings(BaseSettings):
                     f"STORAGE_BACKEND is set to 'supabase', but missing required credentials: {', '.join(missing)}. "
                     "Either set these variables or switch to STORAGE_BACKEND='local'."
                 )
+        elif backend not in ("local", "gcs"):
+            raise ValueError(
+                f"STORAGE_BACKEND '{self.STORAGE_BACKEND}' is not supported. Use 'local', 'supabase', or 'gcs'."
+            )
         return self
 
     @model_validator(mode="after")
@@ -236,6 +242,12 @@ class Settings(BaseSettings):
             problems.append("CORS_ALLOW_ORIGINS must list explicit origins, not '*'")
         if "dev_password" in self.DATABASE_URL:
             problems.append("DATABASE_URL still uses the development default credentials")
+        if self.STORAGE_BACKEND.lower() == "local":
+            problems.append("STORAGE_BACKEND must be 'supabase' or 'gcs' in production, not 'local'")
+        if not self.FERNET_KEY:
+            problems.append("FERNET_KEY is required for encrypting BYO provider secrets")
+        if self.FREE_TIER_MODE and self.FREE_TIER_BUDGET_DAILY_USD <= 0:
+            problems.append("FREE_TIER_BUDGET_DAILY_USD must be positive when FREE_TIER_MODE is enabled")
         if problems:
             raise ValueError("Invalid production configuration: " + "; ".join(problems))
         return self
