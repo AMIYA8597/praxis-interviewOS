@@ -411,6 +411,50 @@ resource "google_artifact_registry_repository" "praxis" {
 }
 
 ################################################################################
+# GCS — Document storage bucket
+################################################################################
+
+resource "google_storage_bucket" "documents" {
+  name          = "praxis-${var.environment}-documents"
+  location      = var.region
+  storage_class = "STANDARD"
+  force_destroy = false
+
+  uniform_bucket_level_access = true
+
+  versioning {
+    enabled = true
+  }
+
+  lifecycle_rule {
+    condition {
+      age = 365
+    }
+    action {
+      type          = "SetStorageClass"
+      storage_class = "NEARLINE"
+    }
+  }
+
+  labels = {
+    environment = var.environment
+    app         = "praxis"
+  }
+}
+
+resource "google_storage_bucket_iam_member" "api_storage" {
+  bucket = google_storage_bucket.documents.name
+  role   = "roles/storage.objectUser"
+  member = "serviceAccount:${google_service_account.api.email}"
+}
+
+resource "google_storage_bucket_iam_member" "worker_storage" {
+  bucket = google_storage_bucket.documents.name
+  role   = "roles/storage.objectUser"
+  member = "serviceAccount:${google_service_account.worker.email}"
+}
+
+################################################################################
 # Cloud Run — API
 ################################################################################
 
@@ -556,23 +600,13 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name = "GROQ_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = "praxis-groq-api-key"
-            version = var.secret_version
-          }
-        }
+        name  = "STORAGE_BACKEND"
+        value = "gcs"
       }
 
       env {
-        name = "OPENAI_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = "praxis-openai-api-key"
-            version = var.secret_version
-          }
-        }
+        name  = "STORAGE_BUCKET"
+        value = "praxis-${var.environment}-documents"
       }
 
       # Startup probe: must succeed before liveness checks begin.
@@ -880,6 +914,16 @@ resource "google_cloud_run_v2_service" "worker" {
           }
         }
       }
+
+      env {
+        name  = "STORAGE_BACKEND"
+        value = "gcs"
+      }
+
+      env {
+        name  = "STORAGE_BUCKET"
+        value = "praxis-${var.environment}-documents"
+      }
     }
   }
 
@@ -1137,6 +1181,11 @@ output "redis_host" {
   value       = google_redis_instance.praxis.host
   description = "Memorystore Redis host (private — only accessible from VPC)"
   sensitive   = true
+}
+
+output "documents_bucket" {
+  value       = google_storage_bucket.documents.name
+  description = "GCS bucket for candidate documents and resumes"
 }
 
 output "load_balancer_ip" {
