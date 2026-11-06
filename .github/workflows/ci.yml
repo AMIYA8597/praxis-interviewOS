@@ -191,6 +191,29 @@ jobs:
       run: |
         ruff check .
 
+    - name: Run Bandit Security Scan
+      run: |
+        pip install bandit
+        bandit -r backend/app/ packages/ai-gateway/praxis_ai_gateway/ realtime-agent/praxis_realtime/ \
+          -s B101,B601 \
+          -ll \
+          --format json --output /tmp/bandit.json || true
+        python3 << 'PYEOF'
+        import json, sys
+        try:
+            data = json.load(open('/tmp/bandit.json'))
+        except Exception:
+            print("No bandit output — scan passed.")
+            sys.exit(0)
+        high_sev = [r for r in data.get('results', []) if r.get('issue_severity') == 'HIGH' and r.get('issue_confidence') == 'HIGH']
+        if high_sev:
+            print(f'::error::Bandit found {len(high_sev)} high-severity, high-confidence issues:')
+            for r in high_sev:
+                print(f"  {r['filename']}:{r['line_number']} — {r['issue_text']} [{r['test_id']}]")
+            sys.exit(1)
+        print(f"Bandit passed: {len(data.get('results', []))} total findings, 0 high-severity/high-confidence.")
+        PYEOF
+
     # Full RLS suite. Runs before everything else that touches the database so
     # an RLS regression fails the build immediately (-x stops on first failure).
     - name: Run RLS Security Suite

@@ -11,6 +11,12 @@ ROUTE_LIMITS = {
     "/api/v1/auth/signup": (5, 5),
     "/api/v1/resumes": (10, 5),
     "/api/v1/jobs/analyze": (10, 5),
+    "/api/v1/sessions": (20, 10),
+    "/api/v1/interview-engines": (20, 10),
+    "/api/v1/prepare-me": (15, 8),
+    "/api/v1/preparation": (20, 10),
+    "/api/v1/exports": (5, 3),
+    "/api/v1/admin": (30, 15),
     "/api/v1/health": (120, 60),
 }
 
