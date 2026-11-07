@@ -32,6 +32,7 @@ COPY backend/ backend/
 RUN pip install --no-cache-dir --no-deps ./packages/config ./packages/ai-gateway ./backend
 
 COPY prompts/ prompts/
+COPY config/ config/
 
 FROM python:3.11.11-slim AS production
 
@@ -52,6 +53,7 @@ COPY --from=source /venv /venv
 COPY --from=source /build/packages /app/packages
 COPY --from=source /build/backend /app/backend
 COPY --from=source /build/prompts /app/prompts
+COPY --from=source /build/config /app/config
 
 RUN mkdir -p /app/storage && chown -R praxis:praxis /app
 

@@ -40,8 +40,9 @@ COPY packages/ packages/
 COPY backend/ backend/
 RUN pip install --no-cache-dir --no-deps ./packages/config ./packages/ai-gateway ./backend
 
-# Copy prompts used at runtime.
+# Copy prompts and config used at runtime.
 COPY prompts/ prompts/
+COPY config/ config/
 
 # ── Stage 3: production runtime ───────────────────────────────────────────────
 FROM python:3.11.11-slim AS production
@@ -65,6 +66,7 @@ COPY --from=source /venv /venv
 COPY --from=source /build/packages /app/packages
 COPY --from=source /build/backend /app/backend
 COPY --from=source /build/prompts /app/prompts
+COPY --from=source /build/config /app/config
 
 RUN mkdir -p /app/storage && chown -R praxis:praxis /app
 
