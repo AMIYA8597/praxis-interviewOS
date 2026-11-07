@@ -14,7 +14,9 @@
 import { supabase } from '@/lib/supabase';
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+  typeof window !== 'undefined'
+    ? ''
+    : (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000');
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 2;
