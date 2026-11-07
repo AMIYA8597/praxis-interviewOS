@@ -145,6 +145,12 @@ variable "domain" {
   default     = ""
 }
 
+variable "frontend_url" {
+  description = "Vercel frontend URL (e.g. https://praxis-interview-os.vercel.app). Used for CORS."
+  type        = string
+  default     = ""
+}
+
 variable "alert_notification_channel" {
   description = "Google Cloud Monitoring notification channel ID for alerts"
   type        = string
@@ -607,6 +613,11 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "STORAGE_BUCKET"
         value = "praxis-${var.environment}-documents"
+      }
+
+      env {
+        name  = "CORS_ALLOW_ORIGINS"
+        value = var.frontend_url != "" ? var.frontend_url : "http://localhost:3000"
       }
 
       # Startup probe: must succeed before liveness checks begin.
