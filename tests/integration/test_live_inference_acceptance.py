@@ -16,6 +16,9 @@ Tests all required live capabilities against configured free-tier providers:
 When credentials (GROQ_API_KEY, GEMINI_API_KEY) are not set in the environment or .env,
 the tests cleanly report BLOCKED / NOT_CONFIGURED without fabricating success.
 """
+import pytest
+
+pytestmark = pytest.mark.live_provider
 
 import os
 import asyncio

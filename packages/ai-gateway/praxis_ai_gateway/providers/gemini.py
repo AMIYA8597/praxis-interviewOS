@@ -75,9 +75,9 @@ class GeminiProvider(LLMProvider):
 
     def _resolve_model(self, kw: dict) -> str:
         requested = kw.get("model")
-        if requested in ("gemini-1.5-flash", "gemini-2.5-flash-lite"):
+        if requested in ("gemini-1.5-flash", "gemini-3.1-flash-lite"):
             requested = None
-        return os.environ.get("GEMINI_MODEL") or requested or "gemini-3.1-flash-lite"
+        return os.environ.get("GEMINI_MODEL") or requested or "gemini-2.0-flash-lite"
 
     async def generate(self, messages, cancellation_token=None, **kw):
         return await with_cancellation(self._generate(messages, cancellation_token=cancellation_token, **kw), cancellation_token)
