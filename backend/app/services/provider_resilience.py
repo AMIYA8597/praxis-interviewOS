@@ -106,7 +106,7 @@ circuit_breaker = CircuitBreaker()
 # Approximate cost per 1K tokens (USD) — updated manually as pricing changes
 _COST_PER_1K_TOKENS: dict[str, dict[str, float]] = {
     "anthropic": {
-        "claude-sonnet-5-5": 0.003,
+        "claude-sonnet-4-20250514": 0.003,
         "claude-haiku-4-5-20251001": 0.00025,
         "default": 0.003,
     },
@@ -116,11 +116,22 @@ _COST_PER_1K_TOKENS: dict[str, dict[str, float]] = {
         "default": 0.005,
     },
     "groq": {
-        "llama-3.1-70b-versatile": 0.00059,
+        "llama-3.3-70b-versatile": 0.00059,
+        "llama-3.1-8b-instant": 0.00005,
         "default": 0.0006,
     },
+    "gemini": {
+        "gemini-2.0-flash-lite": 0.0,
+        "default": 0.00015,
+    },
+    "deepseek": {
+        "default": 0.00014,
+    },
+    "xai": {
+        "default": 0.002,
+    },
     "ollama": {
-        "default": 0.0,  # local
+        "default": 0.0,
     },
     "default": {
         "default": 0.003,
