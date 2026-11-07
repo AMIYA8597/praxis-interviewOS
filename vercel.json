@@ -1,22 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "framework": "nextjs",
   "buildCommand": "pnpm --filter web run build",
   "outputDirectory": "apps/web/.next",
   "installCommand": "pnpm install --frozen-lockfile",
-  "devCommand": "pnpm --filter web run dev",
-
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "@praxis-supabase-url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@praxis-supabase-anon-key",
-    "NEXT_PUBLIC_API_BASE_URL": "@praxis-api-base-url",
-    "NEXT_PUBLIC_REALTIME_URL": "@praxis-realtime-url",
-    "NEXT_PUBLIC_APP_ENV": "@praxis-app-env"
-  },
-
   "regions": ["bom1"],
-
   "headers": [
     {
       "source": "/api/(.*)",
@@ -25,7 +13,6 @@
       ]
     }
   ],
-
   "rewrites": [
     {
       "source": "/health",
