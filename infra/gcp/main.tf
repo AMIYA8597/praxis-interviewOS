@@ -1154,6 +1154,137 @@ resource "google_compute_security_policy" "praxis" {
 }
 
 ################################################################################
+# GCS — Backup bucket
+################################################################################
+
+resource "google_storage_bucket" "backups" {
+  name          = "praxis-${var.environment}-backups"
+  location      = var.region
+  storage_class = "NEARLINE"
+  force_destroy = false
+
+  uniform_bucket_level_access = true
+
+  versioning {
+    enabled = false
+  }
+
+  lifecycle_rule {
+    condition {
+      age = 90
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  labels = {
+    environment = var.environment
+    app         = "praxis"
+    purpose     = "database-backups"
+  }
+}
+
+resource "google_storage_bucket_iam_member" "worker_backup_writer" {
+  bucket = google_storage_bucket.backups.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.worker.email}"
+}
+
+resource "google_storage_bucket_iam_member" "worker_backup_reader" {
+  bucket = google_storage_bucket.backups.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.worker.email}"
+}
+
+################################################################################
+# Cloud Scheduler — Daily database backup
+################################################################################
+
+resource "google_cloud_scheduler_job" "daily_backup" {
+  name        = "praxis-${var.environment}-daily-backup"
+  description = "Trigger daily database backup via Worker health endpoint"
+  schedule    = "0 2 * * *"
+  time_zone   = "Asia/Kolkata"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.worker.uri}/health/trigger-backup"
+    oidc_token {
+      service_account_email = google_service_account.worker.email
+    }
+  }
+
+  retry_config {
+    retry_count          = 3
+    min_backoff_duration = "60s"
+    max_backoff_duration = "600s"
+  }
+
+  depends_on = [google_project_service.required_apis]
+}
+
+################################################################################
+# Monitoring Alerts
+################################################################################
+
+resource "google_monitoring_alert_policy" "api_error_rate" {
+  count        = length(local.alert_channels) > 0 ? 1 : 0
+  display_name = "PRAXIS API Error Rate > 5% (${var.environment})"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "Cloud Run API 5xx rate"
+    condition_threshold {
+      filter          = "resource.type = \"cloud_run_revision\" AND resource.labels.service_name = \"praxis-api\" AND metric.type = \"run.googleapis.com/request_count\" AND metric.labels.response_code_class = \"5xx\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 5
+      duration        = "300s"
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_RATE"
+        cross_series_reducer = "REDUCE_SUM"
+      }
+    }
+  }
+
+  notification_channels = local.alert_channels
+
+  documentation {
+    content   = "PRAXIS API (${var.environment}) is returning >5 errors/sec. Check Cloud Run logs and provider health."
+    mime_type = "text/markdown"
+  }
+}
+
+resource "google_monitoring_alert_policy" "worker_crash" {
+  count        = length(local.alert_channels) > 0 ? 1 : 0
+  display_name = "PRAXIS Worker Instance Crash (${var.environment})"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "Worker instance count < expected"
+    condition_threshold {
+      filter          = "resource.type = \"cloud_run_revision\" AND resource.labels.service_name = \"praxis-worker\" AND metric.type = \"run.googleapis.com/container/instance_count\""
+      comparison      = "COMPARISON_LT"
+      threshold_value = 1
+      duration        = "300s"
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_MEAN"
+        cross_series_reducer = "REDUCE_SUM"
+      }
+    }
+  }
+
+  notification_channels = local.alert_channels
+
+  documentation {
+    content   = "PRAXIS Worker (${var.environment}) has 0 running instances for >5 min. Background jobs are not processing."
+    mime_type = "text/markdown"
+  }
+}
+
+################################################################################
 # Outputs
 ################################################################################
 
@@ -1181,6 +1312,11 @@ output "redis_host" {
   value       = google_redis_instance.praxis.host
   description = "Memorystore Redis host (private — only accessible from VPC)"
   sensitive   = true
+}
+
+output "backups_bucket" {
+  value       = google_storage_bucket.backups.name
+  description = "GCS bucket for database backups"
 }
 
 output "documents_bucket" {
