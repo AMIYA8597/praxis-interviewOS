@@ -53,12 +53,12 @@ async def acceptance_db():
             await conn.execute(text(stmt))
 
         # Seed test data
-        await conn.execute(text(f"INSERT INTO candidates VALUES ('{_CANDIDATE_ID}', 'test-user', 'Test User')"))
-        await conn.execute(text(f"INSERT INTO jobs VALUES ('{_JOB_ID}')"))
-        await conn.execute(text(f"INSERT INTO job_blueprints VALUES ('{_JOB_ID}', '{{\"requirements\": [\"Python\", \"distributed systems\"]}}')"))
-        await conn.execute(text(f"INSERT INTO interview_domains VALUES ('backend', 'Backend Engineering')"))
-        await conn.execute(text(f"INSERT INTO interview_domains VALUES ('distributed_systems', 'Distributed Systems')"))
-        await conn.execute(text(f"INSERT INTO question_bank VALUES ('{_QUESTION_ID}', 'backend', 0.5)"))
+        await conn.execute(text("INSERT INTO candidates VALUES (:cid, :uid, :name)"), {"cid": _CANDIDATE_ID, "uid": "test-user", "name": "Test User"})
+        await conn.execute(text("INSERT INTO jobs VALUES (:jid)"), {"jid": _JOB_ID})
+        await conn.execute(text("INSERT INTO job_blueprints VALUES (:jid, :reqs)"), {"jid": _JOB_ID, "reqs": '{"requirements": ["Python", "distributed systems"]}'})
+        await conn.execute(text("INSERT INTO interview_domains VALUES (:code, :name)"), {"code": "backend", "name": "Backend Engineering"})
+        await conn.execute(text("INSERT INTO interview_domains VALUES (:code, :name)"), {"code": "distributed_systems", "name": "Distributed Systems"})
+        await conn.execute(text("INSERT INTO question_bank VALUES (:qid, :domain, :diff)"), {"qid": _QUESTION_ID, "domain": "backend", "diff": 0.5})
 
     SessionFactory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     yield engine, SessionFactory
@@ -109,9 +109,10 @@ async def test_memory_update_from_scored_session(acceptance_db):
 
     # Verify facts were written
     async with engine.connect() as conn:
-        facts = (await conn.execute(text(
-            f"SELECT * FROM candidate_topic_facts WHERE candidate_id = '{_CANDIDATE_ID}'"
-        ))).fetchall()
+        facts = (await conn.execute(
+            text("SELECT * FROM candidate_topic_facts WHERE candidate_id = :cid"),
+            {"cid": _CANDIDATE_ID},
+        )).fetchall()
 
     assert len(facts) >= 1, "Memory facts must be written after session scoring"
     fact = facts[0]
@@ -160,7 +161,7 @@ async def test_no_scores_before_sessions(acceptance_db):
 
     new_candidate_id = str(uuid.uuid4())
     async with engine.begin() as conn:
-        await conn.execute(text(f"INSERT INTO candidates VALUES ('{new_candidate_id}', 'new-user', 'New User')"))
+        await conn.execute(text("INSERT INTO candidates VALUES (:cid, :uid, :name)"), {"cid": new_candidate_id, "uid": "new-user", "name": "New User"})
 
     from backend.app.services.readiness_v2 import get_readiness_v2
 

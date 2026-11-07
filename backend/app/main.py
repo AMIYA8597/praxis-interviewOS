@@ -98,14 +98,13 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     )
 
     from backend.app.rate_limiter import RateLimitMiddleware
-    from backend.app.middleware import SecurityHeadersMiddleware
+    from backend.app.middleware import SecurityHeadersMiddleware, RequestBodyLimitMiddleware
 
     # Stash APP_ENV on app.state so SecurityHeadersMiddleware can read it
     # without re-instantiating Settings on every request.
     app.state.settings_app_env = settings.APP_ENV
 
-    # Order: last added = outermost. SecurityHeaders → RequestId → CORS → RateLimit.
-    # SecurityHeaders must be outermost so it runs on all responses including errors.
+    # Order: last added = outermost. BodyLimit → SecurityHeaders → RequestId → CORS → RateLimit.
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -117,6 +116,7 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestBodyLimitMiddleware)
     register_exception_handlers(app)
 
     api_prefix = "/api/v1"

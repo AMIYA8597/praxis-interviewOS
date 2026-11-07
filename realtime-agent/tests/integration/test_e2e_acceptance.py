@@ -75,10 +75,10 @@ async def e2e_db(monkeypatch):
             await conn.execute(text(stmt))
 
     async with engine.connect() as conn:
-        await conn.execute(text(f"INSERT INTO candidates VALUES ('{_CANDIDATE_ID}', '{_USER_ID}', 'Test Candidate')"))
-        await conn.execute(text(f"INSERT INTO jobs VALUES ('{_JOB_ID}', 'Senior Backend Engineer', 'Acme Corp')"))
-        await conn.execute(text(f"INSERT INTO practice_sessions (id, candidate_id, job_id) VALUES ('{_SESSION_ID}', '{_CANDIDATE_ID}', '{_JOB_ID}')"))
-        await conn.execute(text(f"INSERT INTO job_blueprints VALUES ('{_JOB_ID}', '{{\"requirements\": [\"Python\", \"React\"]}}', '[]', '[]')"))
+        await conn.execute(text("INSERT INTO candidates VALUES (:cid, :uid, :name)"), {"cid": _CANDIDATE_ID, "uid": _USER_ID, "name": "Test Candidate"})
+        await conn.execute(text("INSERT INTO jobs VALUES (:jid, :title, :company)"), {"jid": _JOB_ID, "title": "Senior Backend Engineer", "company": "Acme Corp"})
+        await conn.execute(text("INSERT INTO practice_sessions (id, candidate_id, job_id) VALUES (:sid, :cid, :jid)"), {"sid": _SESSION_ID, "cid": _CANDIDATE_ID, "jid": _JOB_ID})
+        await conn.execute(text("INSERT INTO job_blueprints VALUES (:jid, :reqs, :a, :b)"), {"jid": _JOB_ID, "reqs": '{"requirements": ["Python", "React"]}', "a": "[]", "b": "[]"})
         await conn.commit()
 
     app.state.db_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

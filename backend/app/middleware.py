@@ -33,6 +33,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         # X-XSS-Protection: 0 is the modern recommendation (disables legacy filter that itself caused XSS)
         response.headers.setdefault("X-XSS-Protection", "0")
+        # Prevent caching of authenticated API responses that may contain PII
+        path = request.url.path
+        if not (path.endswith("/health/live") or path.endswith("/health/ready") or path == "/api/v1/health"):
+            response.headers.setdefault("Cache-Control", "no-store")
+            response.headers.setdefault("Pragma", "no-cache")
         # HSTS only makes sense over real HTTPS; omit it in dev to avoid locking out HTTP.
         from packages.config.settings import Settings
         try:
@@ -45,6 +50,22 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "max-age=63072000; includeSubDomains",
             )
         return response
+
+
+class RequestBodyLimitMiddleware(BaseHTTPMiddleware):
+    """Reject requests with bodies exceeding a size limit (defense-in-depth behind Cloud Armor)."""
+
+    MAX_BODY_BYTES = 10 * 1024 * 1024  # 10 MB
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > self.MAX_BODY_BYTES:
+            return Response(
+                content='{"detail":"Request body too large"}',
+                status_code=413,
+                media_type="application/json",
+            )
+        return await call_next(request)
 
 
 # Accept client-supplied ids only if they look like a sane token; otherwise
