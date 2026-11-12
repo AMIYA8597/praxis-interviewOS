@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Response, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +14,8 @@ from backend.app.dependencies import (
 from backend.app.schemas.candidate import CandidateResponse, CandidateUpdate
 from backend.app.schemas.common import COMMON_ERROR_RESPONSES
 from backend.app.services import candidates as service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["candidates"], responses=COMMON_ERROR_RESPONSES)
 
@@ -46,8 +50,10 @@ async def upsert_me(
     redis: Redis = Depends(get_redis),
 ):
     """Onboarding: create the caller's candidate profile, or update it if it exists."""
-    candidate, created = await service.upsert_profile(db, str(user["sub"]), update_data)
+    user_id = str(user["sub"])
+    logger.info("upsert_me_start", extra={"user_id": user_id, "fields": list(update_data.model_dump(exclude_unset=True).keys())})
+    candidate, created = await service.upsert_profile(db, user_id, update_data)
     if created:
         response.status_code = status.HTTP_201_CREATED
-        await invalidate_candidate_cache(redis, str(user["sub"]))
+        await invalidate_candidate_cache(redis, user_id)
     return candidate

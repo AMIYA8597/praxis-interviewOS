@@ -52,8 +52,13 @@ export default function OnboardingPage() {
         window.location.href = "/";
       }, 1500);
     } catch (err: unknown) {
-      const msg = err instanceof ApiError ? err.message : (err as Error).message;
-      setStatus(`Error: ${msg}`);
+      if (err instanceof ApiError) {
+        console.error("Onboarding API error:", err.status, err.message, err.body);
+        setStatus(`Error: ${err.message} (${err.status})`);
+      } else {
+        console.error("Onboarding error:", err);
+        setStatus(`Error: ${(err as Error).message}`);
+      }
     }
   };
 

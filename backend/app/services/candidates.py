@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Candidate
@@ -46,12 +46,11 @@ async def upsert_profile(db: AsyncSession, user_id: str, update: CandidateUpdate
         await repo.ensure_profile(db, user_id)
         candidate = await repo.create(db, user_id, values)
         await db.commit()
-    except IntegrityError:
+    except (IntegrityError, DBAPIError) as exc:
         await db.rollback()
-        # Either a concurrent create won, or profiles.id has no matching auth.users row.
+        logger.warning("candidate_upsert_error", extra={"user_id": user_id, "error": str(exc)})
         existing = await repo.get_for_profile(db, user_id)
         if existing is not None:
             return existing, False
-        logger.warning("candidate_create_conflict")
         raise ConflictError("Unable to create candidate profile for this account")
     return candidate, True

@@ -13,6 +13,42 @@ async def live_check():
     """Liveness probe. Always returns 200 OK if the process is up."""
     return {"status": "ok"}
 
+@router.get("/health/db-tables", status_code=status.HTTP_200_OK)
+async def db_tables_check(db: AsyncSession = Depends(get_db_session)):
+    """Diagnostic: list tables and check key columns exist."""
+    try:
+        res = await db.execute(text(
+            "SELECT table_schema, table_name FROM information_schema.tables "
+            "WHERE table_schema IN ('public', 'auth') ORDER BY table_schema, table_name"
+        ))
+        tables = [{"schema": r[0], "table": r[1]} for r in res.fetchall()]
+    except Exception as e:
+        return {"error": f"tables query failed: {e}"}
+
+    try:
+        res2 = await db.execute(text(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_name = 'profiles' AND table_schema = 'public'"
+        ))
+        profile_cols = [{"column": r[0], "type": r[1]} for r in res2.fetchall()]
+    except Exception as e:
+        profile_cols = [{"error": str(e)}]
+
+    try:
+        res3 = await db.execute(text(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_name = 'candidates' AND table_schema = 'public'"
+        ))
+        candidate_cols = [{"column": r[0], "type": r[1]} for r in res3.fetchall()]
+    except Exception as e:
+        candidate_cols = [{"error": str(e)}]
+
+    return {
+        "tables": tables,
+        "profile_columns": profile_cols,
+        "candidate_columns": candidate_cols,
+    }
+
 @router.get("/health/ready", status_code=status.HTTP_200_OK)
 async def ready_check(
     db: AsyncSession = Depends(get_db_session),
