@@ -39,6 +39,7 @@ COPY backend/ backend/
 COPY realtime-agent/ realtime-agent/
 RUN pip install --no-cache-dir --no-deps ./packages/config ./packages/ai-gateway ./backend ./realtime-agent
 
+COPY config/ config/
 COPY prompts/ prompts/
 # Pre-download models at build time so cold starts are fast.
 # Models are baked into the image layer — deterministic, no runtime downloads.
@@ -65,6 +66,7 @@ COPY --from=source /venv /venv
 COPY --from=source /build/packages /app/packages
 COPY --from=source /build/backend /app/backend
 COPY --from=source /build/realtime-agent /app/realtime-agent
+COPY --from=source /build/config /app/config
 COPY --from=source /build/prompts /app/prompts
 
 # Copy pre-downloaded ML models with correct ownership so praxis user can read them.
