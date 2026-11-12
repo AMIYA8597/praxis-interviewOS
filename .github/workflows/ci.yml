@@ -383,8 +383,9 @@ jobs:
       run: |
         for img in praxis-api:ci-test praxis-realtime:ci-test praxis-worker:ci-test praxis-sandbox:ci-test; do
           docker inspect "$img" --format='{{json .Config.Env}}' | \
-            python3 -c "
-        import json, sys, re
+            IMG_NAME="$img" python3 -c "
+        import json, sys, re, os
+        img = os.environ['IMG_NAME']
         envs = json.load(sys.stdin)
         skip_names = {'GPG_KEY', 'PYTHON_GET_PIP_SHA256', 'PYTHON_SETUP_TOOLS_VERSION'}
         secret_patterns = [r'(?i)(key|token|secret|password|credential|api_key)\s*=\s*.{10,}']
@@ -396,7 +397,7 @@ jobs:
                 if re.search(p, e) and '=' in e:
                     val = e.split('=', 1)[1]
                     if val not in ('', 'None', 'true', 'false', '0', '1', '/app/.cache/huggingface', '1'):
-                        print(f'POTENTIAL SECRET IN IMAGE ENV: {e.split(\"=\")[0]}')
+                        print(f'POTENTIAL SECRET IN IMAGE ENV: {name}')
                         sys.exit(1)
         print(f'No secrets detected in {img}')
         "
