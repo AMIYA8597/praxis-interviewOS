@@ -81,7 +81,7 @@ class FastClassifier:
         cache_key = None
         if self.redis_pool:
             key_content = f"{transcript.strip()}|{prior_context.strip()}"
-            hash_id = hashlib.md5(key_content.encode('utf-8')).hexdigest()
+            hash_id = hashlib.md5(key_content.encode('utf-8'), usedforsecurity=False).hexdigest()
             cache_key = f"cache:classify:{hash_id}"
             
             try:
