@@ -11,7 +11,6 @@ for client SDK generation (e.g. openapi-typescript-codegen).
 """
 import argparse
 import json
-import sys
 
 def main():
     parser = argparse.ArgumentParser(description="Export PRAXIS OpenAPI schema")

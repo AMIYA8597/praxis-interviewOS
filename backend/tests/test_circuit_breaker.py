@@ -1,6 +1,6 @@
 import pytest
 import pytest_asyncio
-from backend.app.services.provider_resilience import CircuitBreaker, CircuitState
+from backend.app.services.provider_resilience import CircuitBreaker
 
 
 @pytest_asyncio.fixture

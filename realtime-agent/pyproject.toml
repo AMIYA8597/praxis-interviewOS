@@ -24,8 +24,9 @@ dependencies = [
     "faster-whisper"
 ]
 
-[tool.setuptools]
-packages = ["realtime_agent"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["realtime_agent*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

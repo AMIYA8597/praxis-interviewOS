@@ -6,8 +6,6 @@ Usage: python scripts/run_migrations_http.py <SUPABASE_ACCESS_TOKEN>
 import glob
 import os
 import sys
-import json
-
 try:
     import requests
 except ImportError:
