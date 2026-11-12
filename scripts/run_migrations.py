@@ -16,6 +16,9 @@ def get_database_url():
         capture_output=True, text=True, shell=True
     )
     url = result.stdout.strip().replace('\r', '').replace('\n', '')
+    url = url.replace('postgresql+asyncpg://', 'postgresql://')
+    # Try direct DB host instead of pooler (pooler may be blocked by firewall)
+    url = url.replace('aws-1-eu-central-1.pooler.supabase.com:5432', 'db.rqbbfegkqmsvthdgoyqk.supabase.co:5432')
     if not url:
         print("ERROR: Could not fetch database URL from Secret Manager")
         print("stderr:", result.stderr)
@@ -31,7 +34,7 @@ def run_migrations(db_url):
         subprocess.check_call([sys.executable, "-m", "pip", "install", "psycopg2-binary"])
         import psycopg2
 
-    conn = psycopg2.connect(db_url)
+    conn = psycopg2.connect(db_url, connect_timeout=15, sslmode='require')
     conn.autocommit = False
     cur = conn.cursor()
 
