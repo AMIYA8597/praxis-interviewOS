@@ -355,10 +355,16 @@ jobs:
 
     - name: Run and verify praxis-worker stays up 30s
       run: |
+        docker run -d --name ci-redis -p 6379:6379 redis:7-alpine
+        for i in $(seq 1 10); do
+          if docker exec ci-redis redis-cli ping | grep -q PONG; then break; fi
+          sleep 1
+        done
         docker run -d --name ci-worker -p 8081:8080 \
+          --link ci-redis:redis \
           -e PORT=8080 \
           -e DATABASE_URL="postgresql://praxis:dev_password@localhost:5432/praxis" \
-          -e REDIS_URL="redis://localhost:6379/0" \
+          -e REDIS_URL="redis://ci-redis:6379/0" \
           -e APP_ENV=test \
           praxis-worker:ci-test
         sleep 30
@@ -371,6 +377,7 @@ jobs:
         echo "praxis-worker stayed up for 30s"
         curl -fsS http://localhost:8081/health/live || curl -fsS http://localhost:8081/health
         docker stop ci-worker && docker rm ci-worker
+        docker stop ci-redis && docker rm ci-redis
 
     - name: Check for secrets in images
       run: |
