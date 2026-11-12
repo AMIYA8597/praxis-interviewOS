@@ -173,13 +173,15 @@ def test_dev_bypass_is_impossible_in_production(monkeypatch):
     from packages.config.settings import Settings
 
     _prod_base = dict(DATABASE_URL="postgresql://u:strong@db/praxis", CORS_ALLOW_ORIGINS="https://app.example.com",
-                       STORAGE_BACKEND="supabase", FERNET_KEY="x" * 44)
+                       STORAGE_BACKEND="supabase", SUPABASE_SERVICE_ROLE_KEY="test-key-" + "x" * 36,
+                       FERNET_KEY="x" * 44)
     with pytest.raises(ValueError):
         Settings(APP_ENV="production", AUTH_DEV_BYPASS=True, SUPABASE_URL=SUPABASE_URL, **_prod_base)
     with pytest.raises(ValueError):
         Settings(APP_ENV="production", SUPABASE_URL="", SUPABASE_JWT_SECRET="", **_prod_base)
     with pytest.raises(ValueError):
         Settings(APP_ENV="production", SUPABASE_URL=SUPABASE_URL, CORS_ALLOW_ORIGINS="*",
-                 DATABASE_URL="postgresql://u:strong@db/praxis", STORAGE_BACKEND="supabase", FERNET_KEY="x" * 44)
+                 DATABASE_URL="postgresql://u:strong@db/praxis", STORAGE_BACKEND="supabase",
+                 SUPABASE_SERVICE_ROLE_KEY="test-key-" + "x" * 36, FERNET_KEY="x" * 44)
     ok = Settings(APP_ENV="production", SUPABASE_URL=SUPABASE_URL, **_prod_base)
     assert ok.auth_dev_bypass_enabled is False and ok.api_docs_enabled is False
