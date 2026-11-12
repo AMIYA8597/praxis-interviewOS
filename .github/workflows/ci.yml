@@ -386,8 +386,12 @@ jobs:
             python3 -c "
         import json, sys, re
         envs = json.load(sys.stdin)
+        skip_names = {'GPG_KEY', 'PYTHON_GET_PIP_SHA256', 'PYTHON_SETUP_TOOLS_VERSION'}
         secret_patterns = [r'(?i)(key|token|secret|password|credential|api_key)\s*=\s*.{10,}']
         for e in envs:
+            name = e.split('=', 1)[0]
+            if name in skip_names:
+                continue
             for p in secret_patterns:
                 if re.search(p, e) and '=' in e:
                     val = e.split('=', 1)[1]
