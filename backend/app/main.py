@@ -64,6 +64,14 @@ def create_app(cfg: Settings | None = None) -> FastAPI:
         app.state.object_storage = get_storage_client()
         app.state.ai_gateway = build_gateway(settings, redis_pool, app.state.db_session_factory)
 
+        # Run idempotent schema patches that may not have been applied yet.
+        async with app.state.db_session_factory() as db:
+            from sqlalchemy import text
+            for col in ("company", "role", "source", "recruiter", "interview_round", "next_action", "notes"):
+                await db.execute(text(f"ALTER TABLE applications ADD COLUMN IF NOT EXISTS {col} text"))
+            await db.commit()
+            logger.info("schema_patch_applied", extra={"table": "applications"})
+
         logger.info(
             "backend_ready",
             extra={

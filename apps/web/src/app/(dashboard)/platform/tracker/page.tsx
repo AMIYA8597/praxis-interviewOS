@@ -70,8 +70,11 @@ export default function ApplicationTrackerPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded text-sm">{error}</div>
+      {error && !loading && (
+        <div className="bg-red-900/20 border border-red-800 text-red-300 p-4 rounded text-sm">
+          {error}
+          <button onClick={() => { setError(null); setLoading(true); load(); }} className="ml-4 underline hover:text-red-200">Retry</button>
+        </div>
       )}
 
       {showForm && (
@@ -132,7 +135,7 @@ export default function ApplicationTrackerPage() {
 
       {loading && <p className="text-gray-400">Loading…</p>}
 
-      {!loading && apps.length === 0 && (
+      {!loading && !error && apps.length === 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded p-10 text-center text-gray-400">
           <p>No applications yet. Add your first one above.</p>
         </div>
