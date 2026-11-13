@@ -32,7 +32,7 @@ export default function SessionsPage() {
   // New session modal state
   const [showModal, setShowModal] = useState(false);
   const [interviewType, setInterviewType] = useState('system_design');
-  const [difficulty, setDifficulty] = useState('medium');
+  const [difficulty, setDifficulty] = useState('standard');
   const [creating, setCreating] = useState(false);
 
   const fetchSessions = () => {
@@ -55,7 +55,7 @@ export default function SessionsPage() {
       const created = await createSession({
         interview_type: interviewType,
         difficulty,
-        mode: 'practice',
+        mode: 'mock_interview',
       });
       setShowModal(false);
       router.push(`/sessions/${created.id}`);
@@ -177,11 +177,10 @@ export default function SessionsPage() {
                 className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
                 <option value="system_design">System Architecture & Design</option>
-                <option value="coding">Coding & Algorithms</option>
+                <option value="technical">Coding & Algorithms</option>
                 <option value="behavioral">Behavioral (STAR Method)</option>
-                <option value="fullstack">Full-Stack Engineering</option>
-                <option value="devops">DevOps & Cloud Infrastructure</option>
-                <option value="ml_engineering">AI/ML & LLM Engineering</option>
+                <option value="mixed">Full-Stack Engineering</option>
+                <option value="screening">Screening Interview</option>
               </select>
             </div>
 
@@ -194,9 +193,9 @@ export default function SessionsPage() {
                 onChange={(e) => setDifficulty(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 text-gray-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
-                <option value="easy">Foundational (Junior / Associate)</option>
-                <option value="medium">Standard (Mid-Level Engineer)</option>
-                <option value="hard">Advanced (Senior / Staff Engineer)</option>
+                <option value="warmup">Foundational (Junior / Associate)</option>
+                <option value="standard">Standard (Mid-Level Engineer)</option>
+                <option value="senior">Advanced (Senior / Staff Engineer)</option>
               </select>
             </div>
 
